@@ -23,7 +23,7 @@ function parseForm(req: NextApiRequest): Promise<{ fields: any; files: any }> {
 }
 
 /**
- * Defensive check to ensure only the designated OCR key is present in the
+ * Defensive check to ensure only the designated OCR key(s) are present in the
  * runtime environment. This detects other env var names that look like
  * OCR/VISION keys (by name) and refuses to run if any extras are present.
  *
@@ -32,7 +32,7 @@ function parseForm(req: NextApiRequest): Promise<{ fields: any; files: any }> {
  * configuration in the application.
  */
 function findExtraOcrKeys(): string[] {
-  const allowed = new Set(['GOOGLE_VISION_API_KEY']);
+  const allowed = new Set(['GOOGLE_VISION_API_KEY', 'OCR_DOCUMENT_READER']);
   return Object.keys(process.env).filter((k) => {
     if (allowed.has(k)) return false;
     // match names that suggest OCR or Vision API keys
@@ -96,8 +96,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     });
   }
 
-  if (!process.env.GOOGLE_VISION_API_KEY) {
-    return res.status(500).json({ ok: false, error: 'Missing GOOGLE_VISION_API_KEY' });
+  // Prefer OCR_DOCUMENT_READER if present (your canonical secret), otherwise fall back to the older name
+  const visionKey = process.env.OCR_DOCUMENT_READER || process.env.GOOGLE_VISION_API_KEY;
+  if (!visionKey) {
+    return res.status(500).json({ ok: false, error: 'Missing OCR API key. Set OCR_DOCUMENT_READER (preferred) or GOOGLE_VISION_API_KEY.' });
   }
 
   try {
@@ -115,7 +117,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // Call Google Vision API
     const visionRes = await fetch(
-      `https://vision.googleapis.com/v1/images:annotate?key=${encodeURIComponent(process.env.GOOGLE_VISION_API_KEY as string)}`,
+      `https://vision.googleapis.com/v1/images:annotate?key=${encodeURIComponent(visionKey as string)}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
