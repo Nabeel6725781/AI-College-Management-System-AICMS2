@@ -35,6 +35,7 @@ import AssignmentsPage from './pages/portal/AssignmentsPage';
 import DocumentUploadPage from './pages/portal/DocumentUploadPage';
 import OcrVerificationPage from './pages/portal/OcrVerificationPage';
 import NotificationsPage from './pages/portal/NotificationsPage';
+import AiTimetableGeneratorPage from './pages/ai/AiTimetableGeneratorPage';
 import ChatbotPage from './pages/portal/ChatbotPage';
 import SettingsPage from './pages/portal/SettingsPage';
 import HelpSupportPage from './pages/portal/HelpSupportPage';
