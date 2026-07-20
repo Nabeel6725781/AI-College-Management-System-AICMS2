@@ -559,7 +559,25 @@ export function useCmsSiteNotifications() {
         .from('cms_site_notifications')
         .select('*')
         .eq('is_active', true)
-        .or(`(starts_at.is.null,starts_at.lte.${now}),and(ends_at.is.null,ends_at.gte.${now})`)
+        export function useCmsSiteNotifications() {
+  const [data, setData] = useState<CmsSiteNotification[]>([]);
+  const [loading, setLoading] = useState(true);
+  useEffect(() => {
+    (async () => {
+      const now = new Date().toISOString();
+      const { data } = await supabase
+        .from('cms_site_notifications')
+        .select('*')
+        .eq('is_active', true)
+        .or(`starts_at.is.null,starts_at.lte.${now}`)
+        .or(`ends_at.is.null,ends_at.gte.${now}`)
+        .order('created_at', { ascending: false });
+      setData((data as CmsSiteNotification[]) ?? []);
+      setLoading(false);
+    })();
+  }, []);
+  return { data, loading };
+}
         .order('created_at', { ascending: false });
       setData((data as CmsSiteNotification[]) ?? []);
       setLoading(false);
