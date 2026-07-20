@@ -224,7 +224,7 @@ const defaultHomepage: CmsHomepage = {
   id: '',
   hero_eyebrow: 'Welcome to Meridian University',
   hero_title: 'Inspiring Minds, Shaping Futures',
-  hero_subtitle: 'Since 1851, Meridian University has been a beacon of academic excellence, groundbreaking research, and transformative education. Join a community where your potential knows no bounds.',
+  hero_subtitle: 'Since 1851, Meridian University has been a beacon of academic excellence, groundbreaking research, and transformative education. Join a community where your potential knows no b[...]',
   hero_image_url: 'https://images.pexels.com/photos/207692/pexels-photo-207692.jpeg?auto=compress&cs=tinysrgb&w=1920',
   hero_cta_primary: 'Apply Now',
   hero_cta_secondary: 'Explore Meridian',
@@ -233,8 +233,8 @@ const defaultHomepage: CmsHomepage = {
   stat_faculty: '600+',
   stat_programs: '80+',
   welcome_title: 'A community where intellectual curiosity meets boundless opportunity',
-  welcome_body: 'At Meridian, we believe education is more than a degree — it\'s a transformation. Our students learn from world-renowned faculty, conduct research that changes the world, and graduate prepared to lead with integrity and vision.',
-  testimonial_quote: 'Meridian didn\'t just teach me what to think — it taught me how to think. The faculty pushed me to question assumptions, pursue bold ideas, and discover what I\'m truly capable of.',
+  welcome_body: 'At Meridian, we believe education is more than a degree — it\'s a transformation. Our students learn from world-renowned faculty, conduct research that changes the world, and g[...]',
+  testimonial_quote: 'Meridian didn\'t just teach me what to think — it taught me how to think. The faculty pushed me to question assumptions, pursue bold ideas, and discover what I\'m truly ca[...]',
   testimonial_author: 'Dr. Sarah Lin',
   testimonial_role: 'Class of 2015 · Rhodes Scholar · CEO, NeuroLab',
   cta_title: 'Your future starts here.',
@@ -247,17 +247,17 @@ const defaultAbout: CmsAbout = {
   hero_title: 'A legacy of learning since 1851',
   hero_subtitle: 'For over 175 years, Meridian University has been at the forefront of higher education, producing leaders, innovators, and thinkers who have shaped our world.',
   story_title: 'From a small college to a world-class institution',
-  story_body1: 'Founded in 1851 as a small liberal arts college, Meridian University has grown into a world-class research institution while remaining true to its founding mission: to provide an education that transforms lives.',
-  story_body2: 'Our 175-year history is marked by pioneering achievements — from establishing one of the first computer science departments on the West Coast to launching a $50 million AI research institute. Through every era, Meridian has been a place where bold ideas take flight.',
-  story_body3: 'Today, we serve over 12,000 students across six academic departments, with a global network of 80,000+ alumni leading in every field from science and technology to arts and public service.',
-  mission_text: 'To educate and empower students through rigorous scholarship, groundbreaking research, and a commitment to the public good. We strive to create knowledge that transforms lives and communities, preparing graduates who lead with wisdom, integrity, and purpose.',
-  vision_text: 'To be a university where the boldest ideas are born, where students from all backgrounds discover their potential, and where research addresses humanity\'s greatest challenges. We envision a future shaped by Meridian graduates leading with knowledge and compassion.',
+  story_body1: 'Founded in 1851 as a small liberal arts college, Meridian University has grown into a world-class research institution while remaining true to its founding mission: to provide an [...]',
+  story_body2: 'Our 175-year history is marked by pioneering achievements — from establishing one of the first computer science departments on the West Coast to launching a $50 million AI resea[...]',
+  story_body3: 'Today, we serve over 12,000 students across six academic departments, with a global network of 80,000+ alumni leading in every field from science and technology to arts and public[...]',
+  mission_text: 'To educate and empower students through rigorous scholarship, groundbreaking research, and a commitment to the public good. We strive to create knowledge that transforms lives an[...]',
+  vision_text: 'To be a university where the boldest ideas are born, where students from all backgrounds discover their potential, and where research addresses humanity\'s greatest challenges. We[...]',
   stat_alumni: '80,000+',
   stat_research: '$200M',
   stat_ratio: '9:1',
   stat_placement: '94%',
   campus_title: 'A 200-acre living laboratory',
-  campus_body: 'Our campus blends historic architecture with cutting-edge facilities. From the 1851 Founders Hall to the new AI Research Institute, every space is designed to inspire learning and discovery.',
+  campus_body: 'Our campus blends historic architecture with cutting-edge facilities. From the 1851 Founders Hall to the new AI Research Institute, every space is designed to inspire learning and[...]',
   updated_at: '',
 };
 
@@ -559,8 +559,7 @@ export function useCmsSiteNotifications() {
         .from('cms_site_notifications')
         .select('*')
         .eq('is_active', true)
-        .or(`starts_at.is.null,starts_at.lte.${now}`)
-        .or(`ends_at.is.null,ends_at.gte.${now}`)
+        .or(`(starts_at.is.null,starts_at.lte.${now}),and(ends_at.is.null,ends_at.gte.${now})`)
         .order('created_at', { ascending: false });
       setData((data as CmsSiteNotification[]) ?? []);
       setLoading(false);
