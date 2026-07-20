@@ -11,6 +11,7 @@ export type Route =
   | { name: 'news' }
   | { name: 'faq' }
   | { name: 'gallery' }
+  | { name: 'chatbot' }
   | { name: 'news-article'; id: string }
   | { name: 'login' }
   | { name: 'register' }
@@ -110,6 +111,7 @@ const routeMap: Record<string, (parts: string[]) => Route> = {
   departments: () => ({ name: 'departments' }),
   faculty: () => ({ name: 'faculty' }),
   contact: () => ({ name: 'contact' }),
+  chatbot: () => ({ name: 'chatbot' }),
   news: (parts) => {
     if (parts[1]) return { name: 'news-article', id: parts[1] };
     return { name: 'news' };
