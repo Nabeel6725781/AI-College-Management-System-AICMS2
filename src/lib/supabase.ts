@@ -1,7 +1,11 @@
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const rawSupabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+// The env may contain the REST endpoint path (e.g. .../rest/v1/); the Supabase
+// client needs the base project URL, so strip any trailing path segment.
+const supabaseUrl = rawSupabaseUrl.replace(/\/rest\/v1\/?$/, '').replace(/\/$/, '');
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
