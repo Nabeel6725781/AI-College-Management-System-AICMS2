@@ -21,6 +21,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [signingIn, setSigningIn] = useState(false);
 
   useEffect(() => {
+    let settled = false;
+    const timeout = setTimeout(() => {
+      if (!settled) {
+        settled = true;
+        setLoading(false);
+      }
+    }, 4000);
+
     supabase.auth
       .getSession()
       .then(({ data }) => {
@@ -30,14 +38,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setSession(null);
       })
       .finally(() => {
+        settled = true;
+        clearTimeout(timeout);
         setLoading(false);
       });
 
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, newSession) => {
-      setSession(newSession);
-    });
+    let listener: { subscription: { unsubscribe: () => void } } | undefined;
+    try {
+      listener = supabase.auth.onAuthStateChange((_event, newSession) => {
+        setSession(newSession);
+      });
+    } catch {
+      // auth listener setup failed; non-fatal
+    }
 
-    return () => listener.subscription.unsubscribe();
+    return () => {
+      clearTimeout(timeout);
+      listener?.subscription.unsubscribe();
+    };
   }, []);
 
   const signIn = async (email: string, password: string) => {
