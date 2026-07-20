@@ -22,6 +22,24 @@ function parseForm(req: NextApiRequest): Promise<{ fields: any; files: any }> {
   });
 }
 
+/**
+ * Defensive check to ensure only the designated OCR key is present in the
+ * runtime environment. This detects other env var names that look like
+ * OCR/VISION keys (by name) and refuses to run if any extras are present.
+ *
+ * CRITICAL: This only validates environment variables and does NOT modify
+ * or remove any variables. It also does not touch any other API keys or
+ * configuration in the application.
+ */
+function findExtraOcrKeys(): string[] {
+  const allowed = new Set(['GOOGLE_VISION_API_KEY']);
+  return Object.keys(process.env).filter((k) => {
+    if (allowed.has(k)) return false;
+    // match names that suggest OCR or Vision API keys
+    return /ocr|vision|google[_-]?vision|vision[_-]?api|google[_-]?api/i.test(k);
+  });
+}
+
 function extractKeyedFields(text: string) {
   const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
   const res: Array<{ label: string; value: string; confidence: number }> = [];
@@ -66,6 +84,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (req.method !== 'POST') {
     res.setHeader('Allow', 'POST');
     return res.status(405).json({ ok: false, error: 'Method not allowed' });
+  }
+
+  // Defensive check: refuse to run if any extra OCR/vision-looking env vars exist.
+  const extras = findExtraOcrKeys();
+  if (extras.length > 0) {
+    console.error('Misconfigured OCR env vars detected:', extras);
+    return res.status(500).json({
+      ok: false,
+      error: 'Misconfigured OCR environment. Remove extra OCR/VISION keys: ' + extras.join(', '),
+    });
   }
 
   if (!process.env.GOOGLE_VISION_API_KEY) {
