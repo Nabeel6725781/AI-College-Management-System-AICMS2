@@ -559,8 +559,7 @@ export function useCmsSiteNotifications() {
         .from('cms_site_notifications')
         .select('*')
         .eq('is_active', true)
-        .or(`starts_at.is.null,starts_at.lte.${now}`)
-        .or(`ends_at.is.null,ends_at.gte.${now}`)
+        .and(`or(starts_at.is.null,starts_at.lte.${now}),or(ends_at.is.null,ends_at.gte.${now})`)
         .order('created_at', { ascending: false });
       setData((data as CmsSiteNotification[]) ?? []);
       setLoading(false);
