@@ -149,7 +149,7 @@ const aiRoutes = new Set([
   'ai-dashboard', 'ai-scanner', 'ai-computer-vision', 'ai-certificate',
   'ai-duplicate', 'ai-admission', 'ai-performance-prediction',
   'ai-result-prediction', 'ai-attendance-prediction', 'ai-chatbot',
-  'ai-smart-search', 'ai-reports',
+  'ai-smart-search', 'ai-reports','ai-timetable',
 ]);
 
 export default function App() {
