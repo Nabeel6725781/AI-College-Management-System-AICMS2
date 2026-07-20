@@ -1,0 +1,81 @@
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,400;9..144,500;9..144,600;9..144,700&family=Inter:wght@300;400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+  :root {
+    --theme-primary: #0f1118;
+    --theme-accent: #c69035;
+  }
+  body {
+    @apply bg-ink-50 text-ink-900 font-sans antialiased;
+  }
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-serif;
+  }
+}
+
+@layer components {
+  .container-wide {
+    @apply max-w-7xl mx-auto px-4 sm:px-6 lg:px-8;
+  }
+  .container-narrow {
+    @apply max-w-4xl mx-auto px-4 sm:px-6 lg:px-8;
+  }
+  .btn-primary {
+    @apply inline-flex items-center gap-2 px-6 py-3 bg-ink-900 text-white font-medium rounded-lg transition-all duration-300 hover:bg-ink-800 hover:shadow-lg hover:-translate-y-0.5;
+  }
+  .btn-secondary {
+    @apply inline-flex items-center gap-2 px-6 py-3 bg-white text-ink-900 font-medium rounded-lg border border-ink-200 transition-all duration-300 hover:border-ink-900 hover:shadow-md hover:-translate-y-0.5;
+  }
+  .btn-gold {
+    @apply inline-flex items-center gap-2 px-6 py-3 text-white font-medium rounded-lg transition-all duration-300 hover:shadow-lg hover:-translate-y-0.5;
+    background-color: var(--theme-accent);
+  }
+  .btn-gold:hover {
+    filter: brightness(0.92);
+  }
+  .section-eyebrow {
+    @apply text-xs font-sans font-semibold uppercase tracking-[0.2em];
+    color: var(--theme-accent);
+  }
+  .card {
+    @apply bg-white rounded-2xl border border-ink-100 shadow-sm transition-all duration-300;
+  }
+  .card-hover {
+    @apply hover:shadow-xl hover:border-ink-200 hover:-translate-y-1;
+  }
+  .link-underline {
+    @apply relative inline-block after:absolute after:bottom-0 after:left-0 after:h-px after:w-0 after:bg-current after:transition-all after:duration-300 hover:after:w-full;
+  }
+  .theme-primary-bg { background-color: var(--theme-primary); }
+  .theme-accent-bg { background-color: var(--theme-accent); }
+  .theme-primary-text { color: var(--theme-primary); }
+  .theme-accent-text { color: var(--theme-accent); }
+  .theme-primary-border { border-color: var(--theme-primary); }
+  .theme-accent-border { border-color: var(--theme-accent); }
+  .bg-ink-900 { background-color: var(--theme-primary, #0f1118); }
+  .bg-ink-950 { background-color: var(--theme-primary, #0a0b10); }
+  .hover\:bg-ink-900:hover { background-color: var(--theme-primary, #0f1118); }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+  .text-pretty {
+    text-wrap: pretty;
+  }
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+}
