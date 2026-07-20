@@ -554,14 +554,23 @@ export function useCmsSiteNotifications() {
   const [loading, setLoading] = useState(true);
   useEffect(() => {
     (async () => {
-      const now = new Date().toISOString();
+      const now = new Date();
       const { data } = await supabase
         .from('cms_site_notifications')
         .select('*')
         .eq('is_active', true)
-        .or(`(starts_at.is.null,starts_at.lte.${now}),(ends_at.is.null,ends_at.gte.${now})`)
         .order('created_at', { ascending: false });
-      setData((data as CmsSiteNotification[]) ?? []);
+      
+      if (data) {
+        const filtered = (data as CmsSiteNotification[]).filter((notification) => {
+          // Check if notification has started (or no start time)
+          const hasStarted = !notification.starts_at || new Date(notification.starts_at) <= now;
+          // Check if notification hasn't ended (or no end time)
+          const hasntEnded = !notification.ends_at || new Date(notification.ends_at) >= now;
+          return hasStarted && hasntEnded;
+        });
+        setData(filtered);
+      }
       setLoading(false);
     })();
   }, []);
