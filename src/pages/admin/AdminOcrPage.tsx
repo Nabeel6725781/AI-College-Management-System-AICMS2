@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { ScanLine, Upload, FileText, CheckCircle, Clock, X, Sparkles } from 'lucide-react';
 import { useAuth } from '../../lib/auth';
 import { navigateTo } from '../../lib/router';
+import { supabase } from '../../lib/supabase';
 import {
   PortalCard, PortalPageHeader, PortalButton, Badge, StatTile, EmptyState, PortalLoading,
 } from '../../components/portal-ui';
@@ -12,8 +13,11 @@ type VerifiedDoc = { id: number; name: string; date: string; status: string; fie
 export default function AdminOcrPage() {
   const { user } = useAuth();
   const [fileName, setFileName] = useState('');
+  const [file, setFile] = useState<File | null>(null);
   const [scanning, setScanning] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [extracted, setExtracted] = useState<ExtractedField[] | null>(null);
+  const [ocrText, setOcrText] = useState<string | null>(null);
   const [recent, setRecent] = useState<VerifiedDoc[]>([]);
 
   if (!user) {
@@ -22,37 +26,85 @@ export default function AdminOcrPage() {
   }
 
   const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) setFileName(file.name);
+    const f = e.target.files?.[0] ?? null;
+    if (f) {
+      setFileName(f.name);
+      setFile(f);
+    }
   };
 
-  const runScan = () => {
-    if (!fileName) return;
+  const runScan = async () => {
+    if (!file) return;
     setScanning(true);
     setExtracted(null);
-    setTimeout(() => {
-      const fields: ExtractedField[] = [
-        { label: 'Document Type', value: 'Academic Transcript', confidence: 98 },
-        { label: 'Student Name', value: 'Jordan A. Smith', confidence: 95 },
-        { label: 'Student ID', value: 'STU-2024-0817', confidence: 92 },
-        { label: 'Institution', value: 'Northfield University', confidence: 89 },
-        { label: 'GPA', value: '3.78 / 4.00', confidence: 96 },
-        { label: 'Graduation Date', value: 'May 15, 2024', confidence: 84 },
-        { label: 'Degree', value: 'Bachelor of Science', confidence: 91 },
-      ];
-      setExtracted(fields);
+    setOcrText(null);
+
+    try {
+      const form = new FormData();
+      form.append('file', file);
+
+      const res = await fetch('/api/ocr', {
+        method: 'POST',
+        body: form,
+      });
+
+      if (!res.ok) {
+        throw new Error(`OCR API error: ${res.status}`);
+      }
+
+      const body = await res.json();
+
+      // Expecting { ok, extracted: [{label,value,confidence}], ocr_text, status }
+      const extractedFields: ExtractedField[] = body.extracted ?? [];
+      const fullText: string = body.ocr_text ?? extractedFields.map((f: any) => `${f.label}: ${f.value}`).join('\n');
+
+      setExtracted(extractedFields.length ? extractedFields : null);
+      setOcrText(fullText || null);
+    } catch (err) {
+      console.error('OCR failed', err);
+      setExtracted(null);
+      setOcrText('OCR failed. Check console for details.');
+    } finally {
       setScanning(false);
-    }, 1800);
+    }
   };
 
-  const confirmVerify = () => {
-    if (!extracted) return;
-    setRecent((prev) => [
-      { id: Date.now(), name: fileName, date: new Date().toLocaleString(), status: 'verified', fields: extracted.length },
-      ...prev,
-    ]);
-    setExtracted(null);
-    setFileName('');
+  const confirmVerify = async () => {
+    if (!extracted && !ocrText) return;
+    setSaving(true);
+
+    try {
+      // Insert a document record into supabase. Adjust columns if your table requires student_id etc.
+      const insertPayload: any = {
+        name: fileName || 'uploaded-document',
+        file_size: file?.size ?? null,
+        mime_type: file?.type ?? null,
+        status: 'verified',
+        ocr_text: ocrText ?? null,
+        created_at: new Date().toISOString(),
+      };
+
+      const { data, error } = await supabase.from('documents').insert(insertPayload).select().single();
+
+      if (error) throw error;
+
+      const docId = (data as any)?.id ?? Date.now();
+
+      setRecent((prev) => [
+        { id: docId, name: fileName, date: new Date().toLocaleString(), status: 'verified', fields: extracted ? extracted.length : 0 },
+        ...prev,
+      ]);
+
+      // clear state
+      setExtracted(null);
+      setOcrText(null);
+      setFile(null);
+      setFileName('');
+    } catch (err) {
+      console.error('Save failed', err);
+    } finally {
+      setSaving(false);
+    }
   };
 
   const avgConfidence = extracted ? Math.round(extracted.reduce((s, f) => s + f.confidence, 0) / extracted.length) : 0;
@@ -61,7 +113,7 @@ export default function AdminOcrPage() {
     <div className="animate-fade-in">
       <PortalPageHeader
         title="OCR Verification"
-        subtitle="Upload and verify documents with simulated OCR extraction"
+        subtitle="Upload and verify documents using OCR API"
         icon={ScanLine}
       />
 
@@ -86,11 +138,11 @@ export default function AdminOcrPage() {
             {fileName && <p className="text-sm text-ink-700 mt-3 font-medium">{fileName}</p>}
           </div>
           <div className="flex gap-3">
-            <PortalButton variant="primary" onClick={runScan} disabled={!fileName || scanning}>
+            <PortalButton variant="primary" onClick={runScan} disabled={!file || scanning}>
               <ScanLine size={16} /> {scanning ? 'Scanning...' : 'Run OCR Scan'}
             </PortalButton>
             {fileName && !scanning && (
-              <PortalButton variant="secondary" onClick={() => { setFileName(''); setExtracted(null); }}>
+              <PortalButton variant="secondary" onClick={() => { setFileName(''); setFile(null); setExtracted(null); setOcrText(null); }}>
                 <X size={16} /> Clear
               </PortalButton>
             )}
@@ -134,12 +186,14 @@ export default function AdminOcrPage() {
                   </div>
                 ))}
               </div>
-              <PortalButton variant="primary" onClick={confirmVerify} className="w-full">
-                <CheckCircle size={16} /> Verify & Save
+              <PortalButton variant="primary" onClick={confirmVerify} className="w-full" disabled={saving}>
+                <CheckCircle size={16} /> {saving ? 'Saving...' : 'Verify & Save'}
               </PortalButton>
             </>
           ) : (
-            <p className="text-sm text-ink-500 text-center py-8">Scanning in progress...</p>
+            <div className="py-4">
+              <p className="text-sm text-ink-700 whitespace-pre-wrap">{ocrText}</p>
+            </div>
           )}
         </PortalCard>
       </div>
