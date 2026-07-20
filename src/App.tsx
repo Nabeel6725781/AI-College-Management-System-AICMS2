@@ -217,6 +217,8 @@ export default function App() {
     switch (route.name) {
       case 'home':
         return <HomePage />;
+      case 'ai-timetable':
+        return <AiTimetableGeneratorPage />;
       case 'about':
         return <AboutPage />;
       case 'admissions':
