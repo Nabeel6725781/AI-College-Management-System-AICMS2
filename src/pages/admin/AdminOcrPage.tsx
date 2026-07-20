@@ -43,7 +43,14 @@ export default function AdminOcrPage() {
       const form = new FormData();
       form.append('file', file);
 
-      const res = await fetch('/api/ocr', {
+      // Use a configurable API base if provided at build time (NEXT_PUBLIC_OCR_API_URL).
+      // If not set, fall back to the relative endpoint used in server-hosted deployments.
+      const apiBase = (process.env.NEXT_PUBLIC_OCR_API_URL && process.env.NEXT_PUBLIC_OCR_API_URL.trim() !== '')
+        ? process.env.NEXT_PUBLIC_OCR_API_URL.replace(/\/$/, '')
+        : '';
+      const endpoint = apiBase ? `${apiBase}/api/ocr` : '/api/ocr';
+
+      const res = await fetch(endpoint, {
         method: 'POST',
         body: form,
       });
