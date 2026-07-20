@@ -1,3 +1,21 @@
+import { navigateTo } from '../../lib/router';
+import {
+  Calendar, // یہ add کریں
+  Upload,
+  ...
+} from 'lucide-react';
+<button
+  onClick={() => navigateTo('/ai/timetable')}
+  className="group flex flex-col items-start gap-3 p-5 rounded-xl border border-ink-100 hover:border-teal-400 hover:bg-teal-50/50 transition-all text-left"
+>
+  <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-cyan-500 to-teal-600 flex items-center justify-center">
+    <Calendar size={22} className="text-white" />
+  </div>
+  <div>
+    <h4 className="font-semibold text-ink-900 group-hover:text-teal-700 transition-colors">Timetable Generator</h4>
+    <p className="text-xs text-ink-500 mt-0.5">Generate optimized class schedules</p>
+  </div>
+</button>
 import { useState } from 'react';
 import {
   ScanLine,
