@@ -80,7 +80,24 @@ function extractKeyedFields(text: string) {
   return res;
 }
 
+// Simple CORS helper: allow only the GitHub Pages origin (frontend) to call this API.
+function setCorsHeaders(res: NextApiResponse) {
+  // Allow your GitHub Pages frontend to call the API
+  res.setHeader('Access-Control-Allow-Origin', 'https://nabeel6725781.github.io');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
+}
+
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  // Always set CORS headers first so every response includes them
+  setCorsHeaders(res);
+
+  // Handle preflight
+  if (req.method === 'OPTIONS') {
+    return res.status(204).end();
+  }
+
   if (req.method !== 'POST') {
     res.setHeader('Allow', 'POST');
     return res.status(405).json({ ok: false, error: 'Method not allowed' });
