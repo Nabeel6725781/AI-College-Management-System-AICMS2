@@ -34,9 +34,26 @@ async function getAIResponse(input: string): Promise<string> {
   const token = import.meta.env.VITE_HF_TOKEN;
   
   if (!token) {
-    return "Error: Hugging Face token not configured. Please set VITE_HF_TOKEN in .env file.";
+    return "Error: Hugging Face token not configured.";
   }
 
+  // Mock responses for testing (comment out when production ready)
+  const mockResponses: Record<string, string> = {
+    "enrollment": "The current enrollment is 12,000+ students across 6 departments. Enrollment trends show a 5% increase year-over-year.",
+    "revenue": "Total revenue collected: $5.2M. Outstanding fees: $320K. Projected revenue for next quarter: $6.1M.",
+    "semester": "Based on current trends, next semester will see approximately 2,600 enrollments with 95% retention rate.",
+    "at-risk": "Currently 45 students are identified as at-risk based on attendance and grade patterns. Recommended interventions: tutoring programs.",
+  };
+
+  // Check for mock keywords
+  const lowerInput = input.toLowerCase();
+  for (const [key, response] of Object.entries(mockResponses)) {
+    if (lowerInput.includes(key)) {
+      return response;
+    }
+  }
+
+  // If no mock match, try real API
   try {
     const response = await fetch(
       'https://api-inference.huggingface.co/models/meta-llama/Llama-2-7b-chat-hf',
