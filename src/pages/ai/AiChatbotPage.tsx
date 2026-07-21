@@ -6,7 +6,6 @@ import {
 import {
   PortalCard, PortalPageHeader,
 } from '../../components/portal-ui';
-import { supabase } from '../../lib/supabase';
 
 type Message = {
   id: string;
@@ -32,15 +31,37 @@ const CAPABILITIES = [
 ];
 
 async function getAIResponse(input: string): Promise<string> {
-  try {
-    const { data, error } = await supabase.functions.invoke('llm-inference', {
-      body: { prompt: input },
-    });
+  const token = import.meta.env.VITE_HF_TOKEN;
+  
+  if (!token) {
+    return "Error: Hugging Face token not configured. Please set VITE_HF_TOKEN in .env file.";
+  }
 
-    if (error) {
-      throw error;
+  try {
+    const response = await fetch(
+      'https://api-inference.huggingface.co/models/meta-llama/Llama-2-7b-chat-hf',
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          inputs: `You are an AI assistant for college management systems. Answer questions about student enrollment, revenue, performance, and institutional insights. Keep responses concise and practical. User question: ${input}`,
+          parameters: {
+            max_length: 500,
+            temperature: 0.7,
+          },
+        }),
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error(`API error: ${response.status}`);
     }
 
+    const data = await response.json();
+    
     if (Array.isArray(data) && data.length > 0 && data[0].generated_text) {
       let text = data[0].generated_text;
       const answerStart = text.lastIndexOf('Answer:');
@@ -130,7 +151,7 @@ export default function AiChatbotPage() {
     <div className="animate-fade-in">
       <PortalPageHeader
         title="AI Chatbot"
-        subtitle="Intelligent assistant powered by Supabase Edge Functions"
+        subtitle="Intelligent assistant powered by Llama 2.7B"
         icon={MessageSquare}
         action={
           <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full border ${
