@@ -6,10 +6,19 @@ serve(async (req) => {
     return new Response("Method not allowed", { status: 405 });
   }
 
-  const { prompt } = await req.json();
-  const apiKey = Deno.env.get("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");
-
   try {
+    const { prompt } = await req.json();
+    
+    // Get the secret from Supabase environment
+    const apiKey = Deno.env.get("hugging_face");
+
+    if (!apiKey) {
+      return new Response(
+        JSON.stringify({ error: "Hugging Face API key not configured" }),
+        { status: 500, headers: { "Content-Type": "application/json" } }
+      );
+    }
+
     const response = await fetch(
       "https://api-inference.huggingface.co/models/meta-llama/Llama-2-7b-chat-hf",
       {
@@ -20,18 +29,29 @@ serve(async (req) => {
         },
         body: JSON.stringify({
           inputs: prompt,
-          parameters: { max_length: 200 },
+          parameters: { 
+            max_length: 500,
+            temperature: 0.7,
+          },
         }),
       }
     );
 
+    if (!response.ok) {
+      throw new Error(`Hugging Face API error: ${response.status}`);
+    }
+
     const data = await response.json();
     return new Response(JSON.stringify(data), {
       headers: { "Content-Type": "application/json" },
+      status: 200,
     });
   } catch (error) {
+    console.error("LLM Inference Error:", error);
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ 
+        error: error instanceof Error ? error.message : "Unknown error",
+      }),
       { status: 500, headers: { "Content-Type": "application/json" } }
     );
   }
