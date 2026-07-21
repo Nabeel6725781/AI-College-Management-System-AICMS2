@@ -7,7 +7,7 @@ serve(async (req) => {
   }
 
   const { prompt } = await req.json();
-  const apiKey = Deno.env.get("HUGGINGFACE_API_KEY");
+  const apiKey = Deno.env.get("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");
 
   try {
     const response = await fetch(
