@@ -1,25 +1,18 @@
 import { useState, useRef, useEffect } from 'react';
 import {
-  MessageSquare, Send, Bot, User, Plus, Sparkles, Brain,
-  TrendingUp, DollarSign, Users, AlertTriangle, Search, Clock,
+  MessageSquare, Send, Bot, User, Brain,
+  TrendingUp, DollarSign, Users, AlertTriangle, Search,
 } from 'lucide-react';
 import {
-  PortalCard, PortalPageHeader, PortalButton,
+  PortalCard, PortalPageHeader,
 } from '../../components/portal-ui';
+import { supabase } from '../../lib/supabase';
 
 type Message = {
   id: string;
   role: 'user' | 'assistant';
   content: string;
   timestamp: string;
-};
-
-type Conversation = {
-  id: string;
-  title: string;
-  preview: string;
-  time: string;
-  messages: Message[];
 };
 
 const QUICK_SUGGESTIONS = [
@@ -38,36 +31,16 @@ const CAPABILITIES = [
   { icon: Brain, label: 'Predictions', desc: 'Semester outcomes, attendance, and performance forecasts' },
 ];
 
-// Call Hugging Face API for real AI responses
 async function getAIResponse(input: string): Promise<string> {
-  const token = import.meta.env.VITE_HF_TOKEN;
-  
-  if (!token) {
-    return "Error: Hugging Face token not configured. Please set VITE_HF_TOKEN in .env file.";
-  }
-
   try {
-    const response = await fetch(
-      'https://api-inference.huggingface.co/models/meta-llama/Llama-2-7b-chat-hf',
-      {
-        headers: { Authorization: `Bearer ${token}` },
-        method: 'POST',
-        body: JSON.stringify({
-          inputs: `You are an AI assistant for college management systems. Answer questions about student enrollment, revenue, performance, and institutional insights. Keep responses concise and professional.\n\nQuestion: ${input}\n\nAnswer:`,
-          parameters: {
-            max_length: 500,
-            temperature: 0.7,
-          },
-        }),
-      }
-    );
+    const { data, error } = await supabase.functions.invoke('llm-inference', {
+      body: { prompt: input },
+    });
 
-    if (!response.ok) {
-      throw new Error(`API error: ${response.status}`);
+    if (error) {
+      throw error;
     }
 
-    const data = await response.json();
-    
     if (Array.isArray(data) && data.length > 0 && data[0].generated_text) {
       let text = data[0].generated_text;
       const answerStart = text.lastIndexOf('Answer:');
@@ -157,7 +130,7 @@ export default function AiChatbotPage() {
     <div className="animate-fade-in">
       <PortalPageHeader
         title="AI Chatbot"
-        subtitle="Intelligent assistant powered by Llama 3.2"
+        subtitle="Intelligent assistant powered by Supabase Edge Functions"
         icon={MessageSquare}
         action={
           <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full border ${
@@ -183,7 +156,7 @@ export default function AiChatbotPage() {
         }
       />
 
-      <PortalCard className="flex flex-col overflow-hidden" >
+      <PortalCard className="flex flex-col overflow-hidden">
         <div className="flex-1 overflow-y-auto p-6 space-y-4 min-h-[500px] max-h-[600px]">
           {messages.length === 0 && !thinking && (
             <div className="flex flex-col items-center justify-center h-full text-center py-12">
@@ -192,7 +165,7 @@ export default function AiChatbotPage() {
               </div>
               <h3 className="text-lg font-bold text-ink-900 mb-2">Meridian AI Assistant</h3>
               <p className="text-sm text-ink-500 max-w-md mb-6">
-                Powered by Llama 3.2 via Hugging Face • Ask anything about your institution
+                Ask anything about your institution's enrollment, performance, or analytics
               </p>
               <div className="grid sm:grid-cols-2 gap-2 max-w-lg w-full">
                 {QUICK_SUGGESTIONS.map((s) => (
