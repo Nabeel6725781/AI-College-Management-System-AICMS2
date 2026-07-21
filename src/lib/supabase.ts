@@ -474,3 +474,6 @@ export type FineConfiguration = {
   is_active: boolean;
   created_at: string;
 };
+const response = await supabase.functions.invoke("llm-inference", {
+  body: { prompt: userMessage },
+});
