@@ -25,7 +25,52 @@ import {
   Badge,
   EmptyState,
 } from '../../components/portal-ui';
+// Add near the top of the file
+import { supabase } from '../../lib/supabase';
 
+// Add this new function
+async function scanDocumentWithOCR(file: File): Promise<{
+  success: boolean;
+  extractedText: string;
+  confidence: number;
+  error?: string;
+}> {
+  try {
+    const base64 = await new Promise<string>((resolve) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const result = reader.result as string;
+        const base64String = result.split(',')[1]; // Remove data:image/...;base64, prefix
+        resolve(base64String);
+      };
+      reader.readAsDataURL(file);
+    });
+
+    const { data, error } = await supabase.functions.invoke('document-ocr', {
+      body: {
+        image: base64,
+        fileName: file.name,
+      },
+    });
+
+    if (error) throw error;
+
+    return {
+      success: data.success,
+      extractedText: data.extractedText || 'No text detected',
+      confidence: data.confidence || 0,
+      error: data.error,
+    };
+  } catch (error) {
+    console.error('OCR Error:', error);
+    return {
+      success: false,
+      extractedText: '',
+      confidence: 0,
+      error: error instanceof Error ? error.message : 'OCR processing failed',
+    };
+  }
+}
 type ProcessingStep = {
   label: string;
   icon: LucideIcon;
