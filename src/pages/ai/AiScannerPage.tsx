@@ -25,6 +25,52 @@ import {
   Badge,
   EmptyState,
 } from '../../components/portal-ui';
+const startScan = useCallback(async () => {
+  if (!selectedFile || !fileInputRef.current?.files?.[0]) return;
+
+  const file = fileInputRef.current.files[0];
+  setIsScanning(true);
+  resetResults();
+
+  // Simulate processing steps
+  let stepIndex = 0;
+  const stepInterval = setInterval(() => {
+    if (stepIndex >= STEPS.length) {
+      clearInterval(stepInterval);
+      return;
+    }
+    setCurrentStep(stepIndex);
+    setSteps((prev) =>
+      prev.map((s, i) => ({
+        ...s,
+        status: i === stepIndex ? 'active' : i < stepIndex ? 'done' : 'pending',
+      }))
+    );
+    stepIndex++;
+  }, 700);
+
+  // Call real OCR API
+  const result = await scanDocumentWithOCR(file);
+
+  if (result.success) {
+    setExtractedText(result.extractedText);
+    
+    // Parse fields from extracted text (demo)
+    const fields: ExtractedField[] = [
+      { field: 'Document Type', value: 'Student Document', confidence: result.confidence },
+      { field: 'Extracted Text Preview', value: result.extractedText.substring(0, 50) + '...', confidence: result.confidence - 2 },
+    ];
+    setExtractedFields(fields);
+  } else {
+    setExtractedText(`Error: ${result.error || 'OCR processing failed'}`);
+  }
+
+  // Finalize
+  clearInterval(stepInterval);
+  setSteps(STEPS.map((s) => ({ ...s, status: 'done' as const })));
+  setIsScanning(false);
+  setScanComplete(true);
+}, [selectedFile]);
 // Add near the top of the file
 import { supabase } from '../../lib/supabase';
 
