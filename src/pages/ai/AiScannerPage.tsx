@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../lib/auth';
 import { navigateTo } from '../../lib/router';
+import { supabase } from '../../lib/supabase';
 import {
   PortalCard,
   PortalPageHeader,
@@ -25,56 +26,37 @@ import {
   Badge,
   EmptyState,
 } from '../../components/portal-ui';
-const startScan = useCallback(async () => {
-  if (!selectedFile || !fileInputRef.current?.files?.[0]) return;
 
-  const file = fileInputRef.current.files[0];
-  setIsScanning(true);
-  resetResults();
+type ProcessingStep = {
+  label: string;
+  icon: LucideIcon;
+  status: 'pending' | 'active' | 'done';
+};
 
-  // Simulate processing steps
-  let stepIndex = 0;
-  const stepInterval = setInterval(() => {
-    if (stepIndex >= STEPS.length) {
-      clearInterval(stepInterval);
-      return;
-    }
-    setCurrentStep(stepIndex);
-    setSteps((prev) =>
-      prev.map((s, i) => ({
-        ...s,
-        status: i === stepIndex ? 'active' : i < stepIndex ? 'done' : 'pending',
-      }))
-    );
-    stepIndex++;
-  }, 700);
+type ExtractedField = {
+  field: string;
+  value: string;
+  confidence: number;
+};
 
-  // Call real OCR API
-  const result = await scanDocumentWithOCR(file);
+type ScanHistoryItem = {
+  id: string;
+  name: string;
+  type: string;
+  accuracy: number;
+  timestamp: string;
+  fields: number;
+};
 
-  if (result.success) {
-    setExtractedText(result.extractedText);
-    
-    // Parse fields from extracted text (demo)
-    const fields: ExtractedField[] = [
-      { field: 'Document Type', value: 'Student Document', confidence: result.confidence },
-      { field: 'Extracted Text Preview', value: result.extractedText.substring(0, 50) + '...', confidence: result.confidence - 2 },
-    ];
-    setExtractedFields(fields);
-  } else {
-    setExtractedText(`Error: ${result.error || 'OCR processing failed'}`);
-  }
+const STEPS: { label: string; icon: LucideIcon }[] = [
+  { label: 'Image Preprocessing', icon: Cpu },
+  { label: 'Text Detection', icon: Search },
+  { label: 'OCR Extraction', icon: ScanLine },
+  { label: 'Data Structuring', icon: Database },
+  { label: 'Quality Check', icon: ShieldCheck },
+];
 
-  // Finalize
-  clearInterval(stepInterval);
-  setSteps(STEPS.map((s) => ({ ...s, status: 'done' as const })));
-  setIsScanning(false);
-  setScanComplete(true);
-}, [selectedFile]);
-// Add near the top of the file
-import { supabase } from '../../lib/supabase';
-
-// Add this new function
+// OCR Function to call Edge Function
 async function scanDocumentWithOCR(file: File): Promise<{
   success: boolean;
   extractedText: string;
@@ -117,34 +99,6 @@ async function scanDocumentWithOCR(file: File): Promise<{
     };
   }
 }
-type ProcessingStep = {
-  label: string;
-  icon: LucideIcon;
-  status: 'pending' | 'active' | 'done';
-};
-
-type ExtractedField = {
-  field: string;
-  value: string;
-  confidence: number;
-};
-
-type ScanHistoryItem = {
-  id: string;
-  name: string;
-  type: string;
-  accuracy: number;
-  timestamp: string;
-  fields: number;
-};
-
-const STEPS: { label: string; icon: LucideIcon }[] = [
-  { label: 'Image Preprocessing', icon: Cpu },
-  { label: 'Text Detection', icon: Search },
-  { label: 'OCR Extraction', icon: ScanLine },
-  { label: 'Data Structuring', icon: Database },
-  { label: 'Quality Check', icon: ShieldCheck },
-];
 
 export default function AiScannerPage() {
   const { user } = useAuth();
@@ -152,7 +106,7 @@ export default function AiScannerPage() {
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const [isScanning, setIsScanning] = useState(false);
   const [progress, setProgress] = useState(0);
-  const [, setCurrentStep] = useState(0);
+  const [currentStep, setCurrentStep] = useState(0);
   const [steps, setSteps] = useState<ProcessingStep[]>(
     STEPS.map((s) => ({ ...s, status: 'pending' as const }))
   );
@@ -164,7 +118,7 @@ export default function AiScannerPage() {
     { id: 'h1', name: 'Transcript_JSmith.pdf', type: 'Transcript', accuracy: 98.2, timestamp: '10 min ago', fields: 6 },
     { id: 'h2', name: 'Certificate_Grad.jpg', type: 'Certificate', accuracy: 95.5, timestamp: '1 hr ago', fields: 5 },
     { id: 'h3', name: 'StudentID_456.png', type: 'ID Card', accuracy: 99.1, timestamp: '2 hrs ago', fields: 4 },
-  { id: 'h4', name: 'Receipt_Tuition.pdf', type: 'Receipt', accuracy: 92.3, timestamp: '3 hrs ago', fields: 5 },
+    { id: 'h4', name: 'Receipt_Tuition.pdf', type: 'Receipt', accuracy: 92.3, timestamp: '3 hrs ago', fields: 5 },
   ]);
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -191,12 +145,14 @@ export default function AiScannerPage() {
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
-  const startScan = useCallback(() => {
-    if (!selectedFile) return;
+  const startScan = useCallback(async () => {
+    if (!selectedFile || !fileInputRef.current?.files?.[0]) return;
+
+    const file = fileInputRef.current.files[0];
     setIsScanning(true);
     resetResults();
 
-    // Step through each processing stage
+    // Simulate processing steps
     let stepIndex = 0;
     const stepInterval = setInterval(() => {
       if (stepIndex >= STEPS.length) {
@@ -213,50 +169,52 @@ export default function AiScannerPage() {
       stepIndex++;
     }, 700);
 
+    // Call real OCR API
+    const result = await scanDocumentWithOCR(file);
+
     // Progress bar animation
+    let progressValue = 0;
     const progressInterval = setInterval(() => {
-      setProgress((prev) => {
-        if (prev >= 100) {
-          clearInterval(progressInterval);
-          clearInterval(stepInterval);
-          // Finalize
-          setSteps(STEPS.map((s) => ({ ...s, status: 'done' as const })));
-          setIsScanning(false);
-          setScanComplete(true);
-          // Generate mock results
-          setExtractedText(
-            `DOCUMENT VERIFICATION REPORT
-=============================
-File: ${selectedFile}
-Scanned: ${new Date().toISOString()}
+      progressValue += 2;
+      setProgress(progressValue);
+      
+      if (progressValue >= 100) {
+        clearInterval(progressInterval);
+        clearInterval(stepInterval);
 
-Extracted Information:
-- Document Type: Academic Transcript
-- Institution: Meridian University
-- Issue Date: 2024-01-15
-- Reference Number: MU-${Math.random().toString(36).substring(2, 10).toUpperCase()}
-
-Content Summary:
-This document appears to be an official academic transcript
-containing course grades, credit hours, and cumulative GPA
-information. The document structure is consistent with
-standard university transcript format.
-
-Verification Status: PASSED
-Confidence: ${Math.floor(Math.random() * 8 + 92)}%`
-          );
-          setExtractedFields([
-            { field: 'Document Type', value: 'Academic Transcript', confidence: 99.2 },
-            { field: 'Name', value: 'Jonathan Smith', confidence: 97.8 },
-            { field: 'Date', value: '2024-01-15', confidence: 98.5 },
-            { field: 'ID Number', value: 'MU-2024-001234', confidence: 96.3 },
-            { field: 'Institution', value: 'Meridian University', confidence: 98.9 },
-            { field: 'Degree', value: 'Bachelor of Science', confidence: 94.7 },
-          ]);
-          return 100;
+        if (result.success) {
+          setExtractedText(result.extractedText);
+          
+          // Parse fields from extracted text
+          const extractedLines = result.extractedText.split('\n').filter((line) => line.trim());
+          const fields: ExtractedField[] = [
+            { 
+              field: 'Document Type', 
+              value: 'Student Document', 
+              confidence: Math.round(result.confidence) 
+            },
+            {
+              field: 'Text Preview',
+              value: result.extractedText.substring(0, 50) + '...',
+              confidence: Math.round(result.confidence) - 2,
+            },
+            {
+              field: 'Total Lines Detected',
+              value: extractedLines.length.toString(),
+              confidence: Math.round(result.confidence) - 1,
+            },
+          ];
+          setExtractedFields(fields);
+        } else {
+          setExtractedText(`Error: ${result.error || 'OCR processing failed'}`);
+          setExtractedFields([]);
         }
-        return prev + 2;
-      });
+
+        // Finalize
+        setSteps(STEPS.map((s) => ({ ...s, status: 'done' as const })));
+        setIsScanning(false);
+        setScanComplete(true);
+      }
     }, 80);
   }, [selectedFile]);
 
