@@ -20,7 +20,7 @@ interface OCRResult {
   }>;
 }
 
-// Method 1: Direct API Key (Development)
+// Direct API Key Call
 async function callGoogleVisionAPI(base64Image: string): Promise<any> {
   const apiKey = Deno.env.get("GOOGLE_VISION_API_KEY");
 
@@ -58,8 +58,7 @@ async function callGoogleVisionAPI(base64Image: string): Promise<any> {
 function parseDocumentFields(
   text: string
 ): Array<{ field: string; value: string; confidence: number }> {
-  const fields: Array<{ field: string; value: string; confidence: number }> =
-    [];
+  const fields: Array<{ field: string; value: string; confidence: number }> = [];
 
   // Student ID patterns
   const studentIdMatch = text.match(/(?:student\s*(?:id|number)|id\s*number)[:\s]*([A-Za-z0-9-]+)/i);
@@ -130,14 +129,17 @@ serve(async (req) => {
 
   try {
     const body = await req.json();
-    const { image, fileName = "document" } = body;
+    const { image: rawImage, fileName = "document" } = body;
 
-    if (!image) {
+    if (!rawImage) {
       return new Response(
         JSON.stringify({ success: false, error: "Missing 'image' in request" }),
         { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } }
       );
     }
+
+    // Clean base64 string (Strip header like 'data:image/jpeg;base64,' if sent)
+    const image = rawImage.replace(/^data:image\/\w+;base64,/, "");
 
     console.log("Processing OCR for:", fileName);
 
@@ -164,16 +166,16 @@ serve(async (req) => {
       );
     }
 
-    // Extract text - prefer full text detection
+    // Extract text
     let extractedText = "";
     let confidence = 0;
 
     if (apiResponse.fullTextAnnotation?.text) {
       extractedText = apiResponse.fullTextAnnotation.text;
-      confidence = 98; // Highest confidence for full document text
+      confidence = 98;
     } else if (apiResponse.textAnnotations?.[0]?.description) {
       extractedText = apiResponse.textAnnotations[0].description;
-      confidence = 92; // High confidence for text annotations
+      confidence = 92;
     }
 
     if (!extractedText) {
@@ -186,7 +188,7 @@ serve(async (req) => {
       );
     }
 
-    // Parse fields from extracted text
+    // Parse fields
     const fields = parseDocumentFields(extractedText);
 
     const result: OCRResult = {
@@ -205,12 +207,6 @@ serve(async (req) => {
               },
             ],
     };
-
-    console.log("OCR Success:", {
-      fileName,
-      textLength: extractedText.length,
-      fieldsFound: fields.length,
-    });
 
     return new Response(JSON.stringify(result), {
       headers: { "Content-Type": "application/json", ...corsHeaders },
