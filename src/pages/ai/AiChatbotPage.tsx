@@ -1,4 +1,4 @@
-// src/pages/portal/ChatbotPage.tsx - Alibaba Cloud Qwen API Integration
+// src/pages/portal/ChatbotPage.tsx - Fixed Alibaba Cloud Headers
 
 import { useState, useRef, useEffect } from 'react';
 import { MessageSquare, Send, Bot, User } from 'lucide-react';
@@ -18,7 +18,7 @@ const QUICK_SUGGESTIONS = [
   "اگلے سیمسٹر کی پیشن گوئی کریں",
 ];
 
-// ✅ ALIBABA CLOUD QWEN API Integration
+// ✅ FIXED: Corrected Alibaba Cloud Headers
 async function getAIResponse(input: string): Promise<string> {
   try {
     const apiKey = import.meta.env.VITE_ALIBABA_API_KEY?.trim();
@@ -40,14 +40,14 @@ async function getAIResponse(input: string): Promise<string> {
       headers: {
         'Authorization': `Bearer ${apiKey}`,
         'Content-Type': 'application/json',
-        'X-DashScope-Async': 'false',
+        // ✅ REMOVED: Invalid header 'X-DashScope-Async'
       },
       body: JSON.stringify({
-        model: 'qwen-turbo', // یا qwen-plus, qwen-max
+        model: 'qwen-turbo',
         messages: [
           {
             role: 'system',
-            content: 'آپ ایک کالج مینجمنٹ سسٹم کے لیے AI اسسٹنٹ ہیں۔ طالب علموں کی تعداد، آمدنی، کارکردگی، اور تجزیات کے بارے میں سوالات کے جوابات دیں۔ جوابات مختصر، عملی اور اچھی طریقے سے فارمیٹ شدہ ہوں۔ اردو اور انگریزی میں جوابات دیں۔'
+            content: 'آپ ایک کالج مینجمنٹ سسٹم کے لیے AI اسسٹنٹ ہیں۔ طالب علموں، آمدنی، اور کارکردگی کے بارے میں سوالات کے جوابات دیں۔'
           },
           {
             role: 'user',
@@ -70,8 +70,9 @@ async function getAIResponse(input: string): Promise<string> {
 
     // ✅ Check for errors
     if (!response.ok) {
-      if (data.code === 'InvalidApiKey') {
-        return "خرابی: API key غلط ہے۔ براہ کرم صحیح key استعمال کریں۔";
+      if (data.code === 'InvalidApiKey' || data.code === 'InvalidParameter') {
+        console.error('❌ API Error Details:', data);
+        return `خرابی: ${data.message || 'API درخواست میں خرابی'}`;
       }
       if (data.message) {
         return `خرابی: ${data.message}`;
@@ -84,7 +85,7 @@ async function getAIResponse(input: string): Promise<string> {
       const message = data.output.choices[0].message;
       if (message && message.content) {
         const aiText = message.content.trim();
-        console.log('✅ AI Response received:', aiText.substring(0, 80) + '...');
+        console.log('✅ AI Response received successfully');
         return aiText;
       }
     }
