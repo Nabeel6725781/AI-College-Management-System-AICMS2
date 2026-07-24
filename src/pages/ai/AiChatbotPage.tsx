@@ -18,20 +18,31 @@ const QUICK_SUGGESTIONS = [
   "اگلے سیمسٹر کی پیشن گوئی کریں",
 ];
 
-// ✅ FIXED: Updated to OpenAI-compatible Alibaba Cloud Qwen API
-async function getAIResponse(input: string): Promise<string> {
+// ✅ Updated to take message history for multi-turn conversational context
+async function getAIResponse(chatHistory: Message[]): Promise<string> {
   try {
     const apiKey = import.meta.env.VITE_ALIBABA_API_KEY?.trim();
-    
+
     if (!apiKey) {
       console.error('❌ Alibaba API Key missing');
       return "خرابی: Alibaba Cloud API key .env میں موجود نہیں۔";
     }
 
-    console.log('🔑 Using Alibaba API Key:', apiKey.substring(0, 20) + '...');
+    console.log('🔑 Using Alibaba API Key:', apiKey.substring(0, 15) + '...');
 
-    // ✅ FIXED: Updated to OpenAI-compatible DashScope endpoint
     const endpoint = "https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions";
+
+    // Format message history into OpenAI-compatible format
+    const formattedMessages = [
+      {
+        role: 'system',
+        content: 'آپ ایک کالج مینجمنٹ سسٹم کے لیے AI اسسٹنٹ ہیں۔ طالب علموں، آمدنی، اور کارکردگی کے بارے میں سوالات کے جوابات دیں۔'
+      },
+      ...chatHistory.map((msg) => ({
+        role: msg.role,
+        content: msg.content,
+      }))
+    ];
 
     console.log('📤 Sending to Alibaba Cloud Qwen API...');
 
@@ -42,26 +53,17 @@ async function getAIResponse(input: string): Promise<string> {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-  model: 'qwen2.5-7b-instruct', // ✅ Updated model
-  messages: [
-    {
-      role: 'system',
-      content: 'آپ ایک کالج مینجمنٹ سسٹم کے لیے AI اسسٹنٹ ہیں۔ طالب علموں، آمدنی، اور کارکردگی کے بارے میں سوالات کے جوابات دیں۔'
-    },
-    {
-      role: 'user',
-      content: input
-    }
-  ],
-  temperature: 0.7,
-  top_p: 0.9,
-  max_tokens: 1024,
-}),
+        model: 'qwen2.5-7b-instruct',
+        messages: formattedMessages,
+        temperature: 0.7,
+        top_p: 0.9,
+        max_tokens: 1024,
+      }),
+    });
 
     console.log('📊 Response Status:', response.status);
 
     const data = await response.json();
-
     console.log('📊 API Response:', data);
 
     // ✅ Check for HTTP & API errors
@@ -80,9 +82,8 @@ async function getAIResponse(input: string): Promise<string> {
     if (data.choices && data.choices.length > 0) {
       const message = data.choices[0].message;
       if (message && message.content) {
-        const aiText = message.content.trim();
         console.log('✅ AI Response received successfully');
-        return aiText;
+        return message.content.trim();
       }
     }
 
@@ -97,7 +98,7 @@ async function getAIResponse(input: string): Promise<string> {
 }
 
 function formatContent(text: string) {
-  return text.split('\n').map((line, i) => {
+  return text.split('\n').map((line, i, arr) => {
     const parts = line.split(/(\*\*[^*]+\*\*)/g);
     return (
       <span key={i}>
@@ -107,7 +108,7 @@ function formatContent(text: string) {
           }
           return <span key={j}>{part}</span>;
         })}
-        {i < text.split('\n').length - 1 && <br />}
+        {i < arr.length - 1 && <br />}
       </span>
     );
   });
@@ -129,43 +130,46 @@ export default function ChatbotPage() {
     if (!content || thinking) return;
 
     const now = new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
-    
-    console.log('📝 User Message:', content);
-    
-    setMessages((prev) => [...prev, {
+
+    const userMessage: Message = {
       id: `u-${Date.now()}`,
       role: 'user',
       content,
       timestamp: now,
-    }]);
-    
+    };
+
+    const updatedMessages = [...messages, userMessage];
+    setMessages(updatedMessages);
     setInput('');
     setThinking(true);
     setConnectionStatus('connecting');
 
     try {
       console.log('🚀 Getting Qwen response...');
-      
-      const aiResponse = await getAIResponse(content);
-      
-      console.log('✅ Response added to chat');
-      
-      setMessages((prev) => [...prev, {
-        id: `a-${Date.now()}`,
-        role: 'assistant',
-        content: aiResponse,
-        timestamp: new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }),
-      }]);
-      
+      const aiResponseText = await getAIResponse(updatedMessages);
+
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: `a-${Date.now()}`,
+          role: 'assistant',
+          content: aiResponseText,
+          timestamp: new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }),
+        },
+      ]);
+
       setConnectionStatus('online');
     } catch (error) {
       console.error('❌ Error:', error);
-      setMessages((prev) => [...prev, {
-        id: `a-${Date.now()}`,
-        role: 'assistant',
-        content: 'معافی چاہتا ہوں، خرابی ہوگئی۔ براہ کرم دوبارہ کوشش کریں۔',
-        timestamp: new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }),
-      }]);
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: `a-${Date.now()}`,
+          role: 'assistant',
+          content: 'معافی چاہتا ہوں، خرابی ہوگئی۔ براہ کرم دوبارہ کوشش کریں۔',
+          timestamp: new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }),
+        },
+      ]);
       setConnectionStatus('error');
     } finally {
       setThinking(false);
