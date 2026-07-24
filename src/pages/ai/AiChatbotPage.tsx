@@ -31,10 +31,10 @@ const CAPABILITIES = [
 ];
 
 async function getAIResponse(input: string): Promise<string> {
-  const token = import.meta.env.VITE_HF_TOKEN;
+  const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
   
-  if (!token) {
-    return "Error: Hugging Face token not configured.";
+  if (!apiKey) {
+    return "Error: Gemini API key not configured. Please add VITE_GEMINI_API_KEY to your .env file.";
   }
 
   // Mock responses for testing (comment out when production ready)
@@ -53,39 +53,40 @@ async function getAIResponse(input: string): Promise<string> {
     }
   }
 
-  // If no mock match, try real API
+  // Google Gemini 1.5 Flash API Call
   try {
     const response = await fetch(
-      'https://api-inference.huggingface.co/models/meta-llama/Llama-2-7b-chat-hf',
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
       {
         method: 'POST',
         headers: {
-          Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          inputs: `You are an AI assistant for college management systems. Answer questions about student enrollment, revenue, performance, and institutional insights. Keep responses concise and practical. User question: ${input}`,
-          parameters: {
-            max_length: 500,
-            temperature: 0.7,
-          },
+          contents: [
+            {
+              role: 'user',
+              parts: [
+                {
+                  text: `You are an AI assistant for a college management system. Answer questions about student enrollment, revenue, performance, and institutional insights. Keep responses concise, practical, and well-formatted with key details bolded where appropriate.\n\nUser question: ${input}`
+                }
+              ]
+            }
+          ]
         }),
       }
     );
 
     if (!response.ok) {
-      throw new Error(`API error: ${response.status}`);
+      const errData = await response.json();
+      throw new Error(`Gemini API Error: ${errData.error?.message || response.statusText}`);
     }
 
     const data = await response.json();
     
-    if (Array.isArray(data) && data.length > 0 && data[0].generated_text) {
-      let text = data[0].generated_text;
-      const answerStart = text.lastIndexOf('Answer:');
-      if (answerStart !== -1) {
-        text = text.substring(answerStart + 7).trim();
-      }
-      return text || "I'm processing your request. Please try again.";
+    if (data.candidates && data.candidates.length > 0 && data.candidates[0].content?.parts?.length > 0) {
+      const reply = data.candidates[0].content.parts[0].text;
+      return reply || "I'm processing your request. Please try again.";
     }
 
     return "Unable to generate response. Please try again.";
@@ -168,7 +169,7 @@ export default function AiChatbotPage() {
     <div className="animate-fade-in">
       <PortalPageHeader
         title="AI Chatbot"
-        subtitle="Intelligent assistant powered by Llama 2.7B"
+        subtitle="Intelligent assistant powered by Gemini 1.5 Flash"
         icon={MessageSquare}
         action={
           <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full border ${
