@@ -1,4 +1,4 @@
-// src/pages/portal/ChatbotPage.tsx - Fixed Alibaba Cloud Headers
+// src/pages/portal/ChatbotPage.tsx - Fixed Alibaba Cloud Headers & OpenAI Compatibility
 
 import { useState, useRef, useEffect } from 'react';
 import { MessageSquare, Send, Bot, User } from 'lucide-react';
@@ -18,7 +18,7 @@ const QUICK_SUGGESTIONS = [
   "اگلے سیمسٹر کی پیشن گوئی کریں",
 ];
 
-// ✅ FIXED: Corrected Alibaba Cloud Headers
+// ✅ FIXED: Updated to OpenAI-compatible Alibaba Cloud Qwen API
 async function getAIResponse(input: string): Promise<string> {
   try {
     const apiKey = import.meta.env.VITE_ALIBABA_API_KEY?.trim();
@@ -30,8 +30,8 @@ async function getAIResponse(input: string): Promise<string> {
 
     console.log('🔑 Using Alibaba API Key:', apiKey.substring(0, 20) + '...');
 
-    // ✅ Alibaba Cloud Qwen API endpoint
-    const endpoint = "https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation";
+    // ✅ FIXED: Updated to OpenAI-compatible DashScope endpoint
+    const endpoint = "https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions";
 
     console.log('📤 Sending to Alibaba Cloud Qwen API...');
 
@@ -40,10 +40,9 @@ async function getAIResponse(input: string): Promise<string> {
       headers: {
         'Authorization': `Bearer ${apiKey}`,
         'Content-Type': 'application/json',
-        // ✅ REMOVED: Invalid header 'X-DashScope-Async'
       },
       body: JSON.stringify({
-        model: 'qwen-turbo',
+        model: 'qwen-turbo', // Ya 'qwen-max' / 'qwen-plus' bhi use kar sakte hain
         messages: [
           {
             role: 'system',
@@ -54,11 +53,9 @@ async function getAIResponse(input: string): Promise<string> {
             content: input
           }
         ],
-        parameters: {
-          temperature: 0.7,
-          top_p: 0.9,
-          max_tokens: 1024,
-        },
+        temperature: 0.7,
+        top_p: 0.9,
+        max_tokens: 1024,
       }),
     });
 
@@ -68,11 +65,11 @@ async function getAIResponse(input: string): Promise<string> {
 
     console.log('📊 API Response:', data);
 
-    // ✅ Check for errors
+    // ✅ Check for HTTP & API errors
     if (!response.ok) {
-      if (data.code === 'InvalidApiKey' || data.code === 'InvalidParameter') {
-        console.error('❌ API Error Details:', data);
-        return `خرابی: ${data.message || 'API درخواست میں خرابی'}`;
+      if (data.error && data.error.message) {
+        console.error('❌ API Error Details:', data.error);
+        return `خرابی: ${data.error.message}`;
       }
       if (data.message) {
         return `خرابی: ${data.message}`;
@@ -80,9 +77,9 @@ async function getAIResponse(input: string): Promise<string> {
       throw new Error(`HTTP ${response.status}`);
     }
 
-    // ✅ Extract response from Alibaba format
-    if (data.output && data.output.choices && data.output.choices.length > 0) {
-      const message = data.output.choices[0].message;
+    // ✅ Extract response from OpenAI-compatible format
+    if (data.choices && data.choices.length > 0) {
+      const message = data.choices[0].message;
       if (message && message.content) {
         const aiText = message.content.trim();
         console.log('✅ AI Response received successfully');
