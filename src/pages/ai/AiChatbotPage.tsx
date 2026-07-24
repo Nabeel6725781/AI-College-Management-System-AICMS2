@@ -54,7 +54,7 @@ async function getAIResponse(input: string): Promise<string> {
     }
 
     let botReply = "";
-    if (Array.isArray(data) && data[0]?.generated_text) {
+    if (Array.isArray(data) && data.length > 0 && data[0]?.generated_text) {
       botReply = data[0].generated_text.trim();
     } else if (data.generated_text) {
       botReply = data.generated_text.trim();
@@ -242,5 +242,3 @@ export default function AiChatbotPage() {
             onKeyDown={(e) => e.key === 'Enter' && handleSend()}
             placeholder="Ask about college insights..."
             disabled={thinking}
-            className="flex-1 min-w-0 px-4 py-2.5 bg-white border border-ink-200 rounded-xl text-sm placeholder-ink-400 focus:outline-none focus:border-cyan-500 disabled:opacity-60"
-          />
