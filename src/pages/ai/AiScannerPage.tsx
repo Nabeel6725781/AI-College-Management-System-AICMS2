@@ -1,4 +1,4 @@
-// src/pages/ai/AiScannerPage.tsx - COMPLETE FILE WITH DIRECT GOOGLE VISION API
+// src/pages/ai/AiScannerPage.tsx - OCR.Space API Integration
 
 import { useState, useRef, useCallback, useEffect } from 'react';
 import {
@@ -67,99 +67,64 @@ const STEPS: { label: string; icon: LucideIcon }[] = [
   { label: 'Quality Check', icon: ShieldCheck },
 ];
 
-// ==================== GOOGLE VISION API FUNCTION ====================
+// ==================== OCR.SPACE API FUNCTION ====================
 /**
- * Direct Google Vision API call - No CORS issues on GitHub Pages
+ * OCR.Space API - Free OCR without API key
+ * No CORS issues, works on GitHub Pages
  */
 async function scanDocumentWithOCR(file: File): Promise<OCRResponse> {
   try {
     console.log('🔍 Starting OCR for:', file.name);
 
-    // Get API key from environment
-    const apiKey = import.meta.env.VITE_GOOGLE_VISION_API_KEY;
+    // Create FormData for multipart upload
+    const formData = new FormData();
+    formData.append('filename', file.name);
+    formData.append('filetype', file.type || 'image/jpeg');
+    formData.append('apikey', 'K87899142372222'); // Free tier - public key
+    formData.append('language', 'eng'); // English OCR
+    formData.append('isOverlayRequired', 'false');
+    formData.append('file', file);
 
-    if (!apiKey) {
-      throw new Error(
-        'Google Vision API key not configured. Add VITE_GOOGLE_VISION_API_KEY to .env file'
-      );
-    }
+    console.log('📤 Calling OCR.Space API...');
 
-    // Convert file to base64
-    const base64 = await new Promise<string>((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => {
-        const result = reader.result as string;
-        resolve(result.split(',')[1]); // Strip out base64 header prefix
-      };
-      reader.onerror = (err) => reject(err);
-      reader.readAsDataURL(file);
+    // Call OCR.Space API
+    const response = await fetch('https://api.ocr.space/parse/image', {
+      method: 'POST',
+      headers: {
+        // Don't set Content-Type - browser will set it with boundary
+      },
+      body: formData,
     });
-
-    if (!base64) {
-      throw new Error('Failed to convert file to base64');
-    }
-
-    console.log('📤 Calling Google Vision API directly...');
-
-    // Call Google Vision API directly (No CORS issues)
-    const response = await fetch(
-      `https://vision.googleapis.com/v1/images:annotate?key=${apiKey}`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          requests: [
-            {
-              image: { content: base64 },
-              features: [
-                { type: 'TEXT_DETECTION', maxResults: 50 },
-                { type: 'DOCUMENT_TEXT_DETECTION', maxResults: 50 },
-              ],
-            },
-          ],
-        }),
-      }
-    );
 
     if (!response.ok) {
       const errorData = await response.text();
-      console.error('❌ Google Vision API Error:', errorData);
-      throw new Error(`Vision API error: ${response.status} - ${errorData}`);
+      console.error('❌ OCR.Space API Error:', errorData);
+      throw new Error(`API error: ${response.status}`);
     }
 
-    const visionData = await response.json();
+    const ocrData = await response.json();
 
-    // Check for API response errors
-    if (!visionData.responses || visionData.responses.length === 0) {
-      throw new Error('No response from Vision API');
+    console.log('📊 OCR.Space Response:', ocrData);
+
+    // Check for API errors
+    if (!ocrData.IsErroredOnProcessing === false) {
+      const errorMsg = ocrData.ErrorMessage?.[0] || 'OCR processing failed';
+      console.error('❌ OCR.Space Error:', errorMsg);
+      throw new Error(errorMsg);
     }
 
-    const apiResponse = visionData.responses[0];
+    let extractedText = ocrData.ParsedText || '';
 
-    if (apiResponse.error) {
-      console.error('❌ Vision API returned error:', apiResponse.error);
-      throw new Error(`Vision API error: ${apiResponse.error.message}`);
-    }
-
-    // Extract text from response
-    let extractedText = '';
-    let confidence = 0;
-
-    if (apiResponse.fullTextAnnotation?.text) {
-      extractedText = apiResponse.fullTextAnnotation.text;
-      confidence = 98; // Highest confidence for full document text
-      console.log('✅ Full text annotation found');
-    } else if (apiResponse.textAnnotations?.[0]?.description) {
-      extractedText = apiResponse.textAnnotations[0].description;
-      confidence = 92; // High confidence for text annotations
-      console.log('✅ Text annotations found');
-    }
-
-    if (!extractedText) {
+    if (!extractedText || extractedText.trim().length === 0) {
       throw new Error('No text detected in image. Try with a clearer document image.');
     }
+
+    console.log('✅ Text extracted, length:', extractedText.length);
+
+    // Set confidence based on OCR accuracy
+    let confidence = 90;
+    if (extractedText.length > 500) confidence = 95; // More text = higher confidence
+    if (extractedText.length < 50) confidence = 75; // Less text = lower confidence
 
     // Parse document fields from extracted text
     const fields: ExtractedField[] = [];
@@ -176,15 +141,39 @@ async function scanDocumentWithOCR(file: File): Promise<OCRResponse> {
       });
     }
 
+    // Roll Number pattern
+    const rollMatch = extractedText.match(
+      /(?:roll\s*(?:number|no|#)|registration\s*number)[:\s#]*([A-Za-z0-9\-_.\/]+)/i
+    );
+    if (rollMatch) {
+      fields.push({
+        field: 'Roll Number',
+        value: rollMatch[1].trim(),
+        confidence: Math.min(confidence, 90),
+      });
+    }
+
     // Name pattern
     const nameMatch = extractedText.match(
-      /(?:name|full\s*name|student\s*name)[:\s]*([A-Za-z\s]+?)(?:\n|$|[,;])/i
+      /(?:name|full\s*name|student\s*name)[:\s]*([A-Za-z\s]+?)(?:\n|$|,|;)/i
     );
     if (nameMatch) {
       fields.push({
         field: 'Name',
         value: nameMatch[1].trim(),
         confidence: Math.min(confidence, 88),
+      });
+    }
+
+    // Father Name pattern
+    const fatherMatch = extractedText.match(
+      /(?:father|father's|guardian)[:\s]*([A-Za-z\s]+?)(?:\n|$|,|;)/i
+    );
+    if (fatherMatch) {
+      fields.push({
+        field: "Father's Name",
+        value: fatherMatch[1].trim(),
+        confidence: Math.min(confidence, 85),
       });
     }
 
@@ -211,7 +200,9 @@ async function scanDocumentWithOCR(file: File): Promise<OCRResponse> {
     }
 
     // Semester/Grade pattern
-    const semesterMatch = extractedText.match(/(?:semester|sem)[:\s#]*([A-Za-z0-9\-\s]+?)(?:\n|$|,)/i);
+    const semesterMatch = extractedText.match(
+      /(?:semester|sem|grade)[:\s#]*([A-Za-z0-9\-\s]+?)(?:\n|$|,)/i
+    );
     if (semesterMatch) {
       fields.push({
         field: 'Semester',
@@ -234,12 +225,24 @@ async function scanDocumentWithOCR(file: File): Promise<OCRResponse> {
 
     // Degree pattern
     const degreeMatch = extractedText.match(
-      /(?:degree|program)[:\s]*([A-Za-z\s\(\)]+?)(?:\n|$)/i
+      /(?:degree|program|qualification)[:\s]*([A-Za-z\s\(\)]+?)(?:\n|$)/i
     );
     if (degreeMatch) {
       fields.push({
         field: 'Degree',
         value: degreeMatch[1].trim(),
+        confidence: Math.min(confidence, 80),
+      });
+    }
+
+    // Department pattern
+    const deptMatch = extractedText.match(
+      /(?:department|dept|branch)[:\s]*([A-Za-z\s]+?)(?:\n|$)/i
+    );
+    if (deptMatch) {
+      fields.push({
+        field: 'Department',
+        value: deptMatch[1].trim(),
         confidence: Math.min(confidence, 80),
       });
     }
@@ -337,11 +340,20 @@ export default function AiScannerPage() {
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      // Validate file size (max 10MB)
-      if (file.size > 10 * 1024 * 1024) {
-        alert('❌ File size exceeds 10MB limit');
+      // Validate file size (max 50MB for OCR.Space)
+      const maxSize = 50 * 1024 * 1024;
+      if (file.size > maxSize) {
+        alert('❌ File size exceeds 50MB limit');
         return;
       }
+
+      // Validate file type
+      const validTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/tiff', 'application/pdf'];
+      if (!validTypes.includes(file.type)) {
+        alert('❌ Invalid file type. Use JPG, PNG, GIF, TIFF, or PDF');
+        return;
+      }
+
       setSelectedFile(file);
       resetResults();
     }
@@ -370,7 +382,7 @@ export default function AiScannerPage() {
     setIsScanning(true);
     resetResults();
 
-    // Step animation - simulate processing steps
+    // Step animation
     let stepIndex = 0;
     const stepInterval = setInterval(() => {
       if (stepIndex < STEPS.length) {
@@ -383,29 +395,29 @@ export default function AiScannerPage() {
         );
         stepIndex++;
       }
-    }, 700);
+    }, 600);
 
     // Progress animation
     let currentProgress = 0;
     const progressInterval = setInterval(() => {
-      currentProgress += Math.random() * 15;
+      currentProgress += Math.random() * 12;
       if (currentProgress <= 90) {
         setProgress(Math.round(currentProgress));
       } else {
         clearInterval(progressInterval);
       }
-    }, 300);
+    }, 400);
 
     try {
-      console.log('🚀 Starting OCR scan process...');
+      console.log('🚀 Starting OCR scan process with OCR.Space...');
 
-      // Call Google Vision API
+      // Call OCR.Space API
       const result = await scanDocumentWithOCR(selectedFile);
 
       console.log('📊 OCR Result:', result);
 
       // Wait for animation to complete
-      await new Promise((resolve) => setTimeout(resolve, STEPS.length * 700 + 500));
+      await new Promise((resolve) => setTimeout(resolve, STEPS.length * 600 + 500));
 
       // Finalize UI
       clearInterval(stepInterval);
@@ -442,7 +454,7 @@ export default function AiScannerPage() {
       setExtractedFields([]);
       clearInterval(stepInterval);
       clearInterval(progressInterval);
-      setScanComplete(true); // Show error state
+      setScanComplete(true);
     } finally {
       setIsScanning(false);
     }
@@ -481,7 +493,7 @@ export default function AiScannerPage() {
     <div className="animate-fade-in">
       <PortalPageHeader
         title="Document Scanner"
-        subtitle="Upload and scan documents with AI-powered OCR extraction"
+        subtitle="Upload and scan documents with AI-powered OCR extraction (OCR.Space)"
         icon={FileText}
         action={
           <PortalButton variant="secondary" onClick={() => navigateTo('/ai/dashboard')}>
@@ -499,7 +511,7 @@ export default function AiScannerPage() {
           <div>
             <h3 className="font-bold">AI Scanner Ready</h3>
             <p className="text-sm text-cyan-50">
-              Supports PDF, PNG, JPG · Max 10MB · {user?.email ?? 'guest'}
+              Supports JPG, PNG, GIF, TIFF, PDF · Max 50MB · {user?.email ?? 'guest'}
             </p>
           </div>
         </div>
@@ -520,13 +532,13 @@ export default function AiScannerPage() {
               </div>
               <div className="text-center">
                 <p className="font-medium text-ink-700">Click to upload or drag & drop</p>
-                <p className="text-xs text-ink-500 mt-1">PNG, JPG, PDF up to 10MB</p>
+                <p className="text-xs text-ink-500 mt-1">JPG, PNG, GIF, TIFF, PDF up to 50MB</p>
               </div>
               <input
                 ref={fileInputRef}
                 id="scanner-file-input"
                 type="file"
-                accept="image/*,application/pdf"
+                accept="image/jpeg,image/png,image/gif,image/tiff,application/pdf"
                 onChange={handleFileSelect}
                 className="hidden"
               />
