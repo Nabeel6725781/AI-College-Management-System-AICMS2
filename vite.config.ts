@@ -8,4 +8,13 @@ export default defineConfig({
   optimizeDeps: {
     exclude: ['lucide-react'],
   },
+  server: {
+    proxy: {
+      '/api-dashscope': {
+        target: 'https://dashscope-intl.aliyuncs.com',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api-dashscope/, ''),
+      },
+    },
+  },
 });
