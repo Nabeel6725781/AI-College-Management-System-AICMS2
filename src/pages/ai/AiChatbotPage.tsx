@@ -42,22 +42,21 @@ async function getAIResponse(input: string): Promise<string> {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'qwen-turbo', // Ya 'qwen-max' / 'qwen-plus' bhi use kar sakte hain
-        messages: [
-          {
-            role: 'system',
-            content: 'آپ ایک کالج مینجمنٹ سسٹم کے لیے AI اسسٹنٹ ہیں۔ طالب علموں، آمدنی، اور کارکردگی کے بارے میں سوالات کے جوابات دیں۔'
-          },
-          {
-            role: 'user',
-            content: input
-          }
-        ],
-        temperature: 0.7,
-        top_p: 0.9,
-        max_tokens: 1024,
-      }),
-    });
+  model: 'qwen2.5-7b-instruct', // ✅ Updated model
+  messages: [
+    {
+      role: 'system',
+      content: 'آپ ایک کالج مینجمنٹ سسٹم کے لیے AI اسسٹنٹ ہیں۔ طالب علموں، آمدنی، اور کارکردگی کے بارے میں سوالات کے جوابات دیں۔'
+    },
+    {
+      role: 'user',
+      content: input
+    }
+  ],
+  temperature: 0.7,
+  top_p: 0.9,
+  max_tokens: 1024,
+}),
 
     console.log('📊 Response Status:', response.status);
 
