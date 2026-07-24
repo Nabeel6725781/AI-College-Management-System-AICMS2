@@ -34,26 +34,10 @@ async function getAIResponse(input: string): Promise<string> {
   const apiKey = import.meta.env.VITE_GEMINI_API_KEY?.trim();
   
   if (!apiKey) {
-    return "Error: VITE_GEMINI_API_KEY is missing. Please add your Google AI Studio API key to .env or GitHub Secrets.";
+    return "Error: VITE_GEMINI_API_KEY is missing. Please add your API key to .env file or GitHub Secrets.";
   }
 
-  // Mock responses for testing (comment out when production ready)
-  const mockResponses: Record<string, string> = {
-    "enrollment": "The current enrollment is 12,000+ students across 6 departments. Enrollment trends show a 5% increase year-over-year.",
-    "revenue": "Total revenue collected: $5.2M. Outstanding fees: $320K. Projected revenue for next quarter: $6.1M.",
-    "semester": "Based on current trends, next semester will see approximately 2,600 enrollments with 95% retention rate.",
-    "at-risk": "Currently 45 students are identified as at-risk based on attendance and grade patterns. Recommended interventions: tutoring programs.",
-  };
-
-  // Check for mock keywords
-  const lowerInput = input.toLowerCase();
-  for (const [key, response] of Object.entries(mockResponses)) {
-    if (lowerInput.includes(key)) {
-      return response;
-    }
-  }
-
-  // Direct REST API Endpoint for Gemini 1.5 Flash (Google AI Studio)
+  // Direct REST API Endpoint for Google AI Studio (Gemini 1.5 Flash)
   const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${encodeURIComponent(apiKey)}`;
 
   try {
@@ -90,7 +74,7 @@ async function getAIResponse(input: string): Promise<string> {
     return "Unable to generate response. Please try again.";
   } catch (error) {
     console.error('AI API Error:', error);
-    return `Error: ${error instanceof Error ? error.message : 'Failed to connect to AI service'}. Please check your API key setup.`;
+    return `Error: ${error instanceof Error ? error.message : 'Failed to connect to AI service'}. Please check your API key.`;
   }
 }
 
