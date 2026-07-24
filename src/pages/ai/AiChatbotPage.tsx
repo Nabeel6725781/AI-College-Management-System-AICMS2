@@ -1,4 +1,4 @@
-// src/pages/portal/ChatbotPage.tsx - Fixed Alibaba Cloud Headers & OpenAI Compatibility
+// src/pages/portal/ChatbotPage.tsx - Resilient Alibaba Qwen Integration with Fallbacks
 
 import { useState, useRef, useEffect } from 'react';
 import { MessageSquare, Send, Bot, User } from 'lucide-react';
@@ -18,21 +18,22 @@ const QUICK_SUGGESTIONS = [
   "اگلے سیمسٹر کی پیشن گوئی کریں",
 ];
 
-// ✅ Updated to take message history for multi-turn conversational context
 async function getAIResponse(chatHistory: Message[]): Promise<string> {
   try {
     const apiKey = import.meta.env.VITE_ALIBABA_API_KEY?.trim();
 
     if (!apiKey) {
-      console.error('❌ Alibaba API Key missing');
+      console.error('❌ Alibaba API Key missing in .env');
       return "خرابی: Alibaba Cloud API key .env میں موجود نہیں۔";
     }
 
-    console.log('🔑 Using Alibaba API Key:', apiKey.substring(0, 15) + '...');
+    // Determine endpoint: Use Vite proxy in development if available, otherwise direct endpoint
+    const isDev = import.meta.env.DEV;
+    const directEndpoint = "https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions";
+    const proxyEndpoint = "/api-dashscope/compatible-mode/v1/chat/completions";
 
-    const endpoint = "https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions";
+    const endpoint = isDev ? proxyEndpoint : directEndpoint;
 
-    // Format message history into OpenAI-compatible format
     const formattedMessages = [
       {
         role: 'system',
@@ -44,56 +45,84 @@ async function getAIResponse(chatHistory: Message[]): Promise<string> {
       }))
     ];
 
-    console.log('📤 Sending to Alibaba Cloud Qwen API...');
+    console.log(`📤 Sending request to API via ${isDev ? 'Dev Proxy' : 'Direct Call'}...`);
 
-    const response = await fetch(endpoint, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'qwen2.5-7b-instruct',
-        messages: formattedMessages,
-        temperature: 0.7,
-        top_p: 0.9,
-        max_tokens: 1024,
-      }),
-    });
+    let response: Response;
+    try {
+      response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'qwen2.5-7b-instruct',
+          messages: formattedMessages,
+          temperature: 0.7,
+          top_p: 0.9,
+          max_tokens: 1024,
+        }),
+      });
+    } catch (fetchError) {
+      // If dev proxy fails, attempt fallback to direct endpoint
+      if (isDev) {
+        console.warn('⚠️ Proxy fetch failed, retrying with direct endpoint...');
+        response = await fetch(directEndpoint, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${apiKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            model: 'qwen2.5-7b-instruct',
+            messages: formattedMessages,
+            temperature: 0.7,
+            top_p: 0.9,
+            max_tokens: 1024,
+          }),
+        });
+      } else {
+        throw fetchError;
+      }
+    }
 
     console.log('📊 Response Status:', response.status);
 
-    const data = await response.json();
-    console.log('📊 API Response:', data);
+    // Safely parse JSON response
+    let data: any = {};
+    const rawText = await response.text();
+    try {
+      data = JSON.parse(rawText);
+    } catch {
+      console.error('❌ Failed to parse JSON response:', rawText);
+      return `خرابی: HTTP ${response.status} - Unparseable server response.`;
+    }
 
-    // ✅ Check for HTTP & API errors
+    // Handle non-200 HTTP statuses
     if (!response.ok) {
-      if (data.error && data.error.message) {
-        console.error('❌ API Error Details:', data.error);
-        return `خرابی: ${data.error.message}`;
+      console.error('❌ API Error Payload:', data);
+      if (data?.error?.message) {
+        return `خرابی (${response.status}): ${data.error.message}`;
       }
-      if (data.message) {
-        return `خرابی: ${data.message}`;
+      if (data?.message) {
+        return `خرابی (${response.status}): ${data.message}`;
       }
-      throw new Error(`HTTP ${response.status}`);
+      return `خرابی: HTTP ${response.status} request failed.`;
     }
 
-    // ✅ Extract response from OpenAI-compatible format
-    if (data.choices && data.choices.length > 0) {
-      const message = data.choices[0].message;
-      if (message && message.content) {
-        console.log('✅ AI Response received successfully');
-        return message.content.trim();
-      }
+    // Extract completion message
+    if (data.choices?.[0]?.message?.content) {
+      console.log('✅ AI Response received successfully');
+      return data.choices[0].message.content.trim();
     }
 
-    console.warn('⚠️ No valid response structure');
+    console.warn('⚠️ No valid choices structure returned:', data);
     return "معافی چاہتا ہوں، جواب نہیں مل سکا۔";
 
   } catch (error) {
-    console.error('❌ Error:', error);
+    console.error('❌ Chatbot Error:', error);
     const msg = error instanceof Error ? error.message : 'نامعلوم خرابی';
-    return `خرابی: ${msg}`;
+    return `نیٹ ورک یا کنکشن کی خرابی: ${msg}`;
   }
 }
 
@@ -158,9 +187,9 @@ export default function ChatbotPage() {
         },
       ]);
 
-      setConnectionStatus('online');
+      setConnectionStatus(aiResponseText.startsWith('خرابی') ? 'error' : 'online');
     } catch (error) {
-      console.error('❌ Error:', error);
+      console.error('❌ Error in handleSend:', error);
       setMessages((prev) => [
         ...prev,
         {
