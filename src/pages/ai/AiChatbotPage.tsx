@@ -23,7 +23,6 @@ async function getAIResponse(input: string): Promise<string> {
     return "Error: VITE_HF_API_KEY is missing. Please add your Hugging Face API key to .env file.";
   }
 
-  // Purely configured for Qwen 2.5 7B Instruct
   const endpoint = "https://huggingface.co";
 
   const systemPrompt = `You are an AI assistant for a college management system. Answer questions about student enrollment, revenue, performance, and institutional insights. Keep responses concise, practical, and well-formatted with key details bolded where appropriate. Always reply politely in a mix of English and Roman Urdu based on user language.`;
@@ -235,7 +234,7 @@ export default function AiChatbotPage() {
           <div ref={messagesEndRef} />
         </div>
 
-        <div className="p-4 bg-ink-50/50 border-top border-ink-100 flex gap-2 items-center">
+        <div className="p-4 bg-ink-50/50 border-t border-ink-100 flex gap-2 items-center">
           <input
             type="text"
             value={input}
@@ -243,3 +242,5 @@ export default function AiChatbotPage() {
             onKeyDown={(e) => e.key === 'Enter' && handleSend()}
             placeholder="Ask about college insights..."
             disabled={thinking}
+            className="flex-1 min-w-0 px-4 py-2.5 bg-white border border-ink-200 rounded-xl text-sm placeholder-ink-400 focus:outline-none focus:border-cyan-500 disabled:opacity-60"
+          />
