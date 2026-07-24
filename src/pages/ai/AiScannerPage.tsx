@@ -69,62 +69,88 @@ const STEPS: { label: string; icon: LucideIcon }[] = [
 
 // ==================== OCR.SPACE API FUNCTION ====================
 /**
- * OCR.Space API - Free OCR without API key
- * No CORS issues, works on GitHub Pages
+ * OCR.Space API Integration using Base64 & Environment Variables
  */
 async function scanDocumentWithOCR(file: File): Promise<OCRResponse> {
   try {
     console.log('🔍 Starting OCR for:', file.name);
 
-    // Create FormData for multipart upload
+    // Get API key and configuration from .env
+    const apiKey = import.meta.env.VITE_OCR_SPACE_API_KEY || 'K87899142372222';
+    const apiUrl = import.meta.env.VITE_OCR_SPACE_API_URL || 'https://api.ocr.space/parse/image';
+    const language = import.meta.env.VITE_OCR_LANGUAGE || 'eng';
+    const maxSize = parseInt(import.meta.env.VITE_OCR_MAX_FILE_SIZE || '52428800', 10);
+
+    // Validate file size
+    if (file.size > maxSize) {
+      const sizeMB = (maxSize / 1024 / 1024).toFixed(0);
+      throw new Error(`File size exceeds ${sizeMB}MB limit`);
+    }
+
+    if (!apiKey) {
+      throw new Error('OCR.Space API key not configured in environment variables');
+    }
+
+    console.log('📤 Converting file to Base64...');
+
+    // Convert file to base64
+    const base64 = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const result = reader.result as string;
+        resolve(result.split(',')[1]); // Remove data:image/...;base64, prefix
+      };
+      reader.onerror = (err) => reject(err);
+      reader.readAsDataURL(file);
+    });
+
+    if (!base64) {
+      throw new Error('Failed to convert file to base64');
+    }
+
+    console.log('📤 Calling OCR.Space API with base64...');
+
     const formData = new FormData();
-    formData.append('filename', file.name);
-    formData.append('filetype', file.type || 'image/jpeg');
-    formData.append('apikey', 'K87899142372222'); // Free tier - public key
-    formData.append('language', 'eng'); // English OCR
+    formData.append('apikey', apiKey);
+    formData.append('base64image', `data:${file.type || 'image/jpeg'};base64,${base64}`);
+    formData.append('language', language);
     formData.append('isOverlayRequired', 'false');
-    formData.append('file', file);
+    formData.append('filetype', file.type || 'image/jpeg');
 
-    console.log('📤 Calling OCR.Space API...');
-
-    // Call OCR.Space API
-    const response = await fetch('https://api.ocr.space/parse/image', {
+    const response = await fetch(apiUrl, {
       method: 'POST',
-      headers: {
-        // Don't set Content-Type - browser will set it with boundary
-      },
       body: formData,
     });
 
     if (!response.ok) {
       const errorData = await response.text();
       console.error('❌ OCR.Space API Error:', errorData);
-      throw new Error(`API error: ${response.status}`);
+      throw new Error(`API error: ${response.status} - ${errorData}`);
     }
 
     const ocrData = await response.json();
-
     console.log('📊 OCR.Space Response:', ocrData);
 
-    // Check for API errors
-    if (!ocrData.IsErroredOnProcessing === false) {
+    if (ocrData.IsErroredOnProcessing === true) {
       const errorMsg = ocrData.ErrorMessage?.[0] || 'OCR processing failed';
       console.error('❌ OCR.Space Error:', errorMsg);
       throw new Error(errorMsg);
     }
 
-    let extractedText = ocrData.ParsedText || '';
+    const parsedResults = ocrData.ParsedResults?.[0];
+    const extractedText = parsedResults?.ParsedText || '';
 
     if (!extractedText || extractedText.trim().length === 0) {
       throw new Error('No text detected in image. Try with a clearer document image.');
     }
 
-    console.log('✅ Text extracted, length:', extractedText.length);
+    console.log('✅ Text extracted successfully! Length:', extractedText.length);
 
-    // Set confidence based on OCR accuracy
+    // Set confidence based on OCR accuracy/length
     let confidence = 90;
-    if (extractedText.length > 500) confidence = 95; // More text = higher confidence
-    if (extractedText.length < 50) confidence = 75; // Less text = lower confidence
+    if (extractedText.length > 500) confidence = 95;
+    if (extractedText.length > 1000) confidence = 98;
+    if (extractedText.length < 50) confidence = 75;
 
     // Parse document fields from extracted text
     const fields: ExtractedField[] = [];
@@ -177,7 +203,7 @@ async function scanDocumentWithOCR(file: File): Promise<OCRResponse> {
       });
     }
 
-    // Date pattern (YYYY-MM-DD or DD/MM/YYYY or MM/DD/YYYY)
+    // Date pattern
     const dateMatch = extractedText.match(
       /(\d{4}-\d{2}-\d{2}|\d{2}\/\d{2}\/\d{4}|\d{1,2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{4})/i
     );
@@ -199,7 +225,7 @@ async function scanDocumentWithOCR(file: File): Promise<OCRResponse> {
       });
     }
 
-    // Semester/Grade pattern
+    // Semester pattern
     const semesterMatch = extractedText.match(
       /(?:semester|sem|grade)[:\s#]*([A-Za-z0-9\-\s]+?)(?:\n|$|,)/i
     );
@@ -211,7 +237,7 @@ async function scanDocumentWithOCR(file: File): Promise<OCRResponse> {
       });
     }
 
-    // Institution/University pattern
+    // Institution pattern
     const institutionMatch = extractedText.match(
       /(?:university|college|institution|school)[:\s]*([A-Za-z\s]+?)(?:\n|$)/i
     );
@@ -246,13 +272,6 @@ async function scanDocumentWithOCR(file: File): Promise<OCRResponse> {
         confidence: Math.min(confidence, 80),
       });
     }
-
-    console.log('✅ OCR Success:', {
-      fileName: file.name,
-      textLength: extractedText.length,
-      fieldsFound: fields.length,
-      confidence,
-    });
 
     return {
       success: true,
@@ -340,14 +359,12 @@ export default function AiScannerPage() {
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      // Validate file size (max 50MB for OCR.Space)
-      const maxSize = 50 * 1024 * 1024;
+      const maxSize = parseInt(import.meta.env.VITE_OCR_MAX_FILE_SIZE || '52428800', 10);
       if (file.size > maxSize) {
-        alert('❌ File size exceeds 50MB limit');
+        alert(`❌ File size exceeds ${(maxSize / 1024 / 1024).toFixed(0)}MB limit`);
         return;
       }
 
-      // Validate file type
       const validTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/tiff', 'application/pdf'];
       if (!validTypes.includes(file.type)) {
         alert('❌ Invalid file type. Use JPG, PNG, GIF, TIFF, or PDF');
@@ -382,7 +399,6 @@ export default function AiScannerPage() {
     setIsScanning(true);
     resetResults();
 
-    // Step animation
     let stepIndex = 0;
     const stepInterval = setInterval(() => {
       if (stepIndex < STEPS.length) {
@@ -397,7 +413,6 @@ export default function AiScannerPage() {
       }
     }, 600);
 
-    // Progress animation
     let currentProgress = 0;
     const progressInterval = setInterval(() => {
       currentProgress += Math.random() * 12;
@@ -411,15 +426,10 @@ export default function AiScannerPage() {
     try {
       console.log('🚀 Starting OCR scan process with OCR.Space...');
 
-      // Call OCR.Space API
       const result = await scanDocumentWithOCR(selectedFile);
 
-      console.log('📊 OCR Result:', result);
-
-      // Wait for animation to complete
       await new Promise((resolve) => setTimeout(resolve, STEPS.length * 600 + 500));
 
-      // Finalize UI
       clearInterval(stepInterval);
       clearInterval(progressInterval);
       setSteps(STEPS.map((s) => ({ ...s, status: 'done' as const })));
@@ -472,7 +482,6 @@ export default function AiScannerPage() {
         fields: extractedFields.length,
       };
       setHistory((prev) => [newItem, ...prev]);
-
       console.log('💾 Scan result saved:', newItem);
     }
   };
@@ -482,10 +491,9 @@ export default function AiScannerPage() {
     startScan();
   };
 
-  // Cleanup on unmount
   useEffect(() => {
     return () => {
-      // Intervals are self-cleaning
+      // Cleanup on unmount
     };
   }, []);
 
@@ -502,7 +510,6 @@ export default function AiScannerPage() {
         }
       />
 
-      {/* Gradient accent banner */}
       <div className="rounded-2xl p-5 mb-6 bg-gradient-to-r from-cyan-500 to-teal-600 text-white shadow-lg">
         <div className="flex items-center gap-3">
           <div className="w-11 h-11 rounded-xl bg-white/20 flex items-center justify-center flex-shrink-0 backdrop-blur-sm">
@@ -615,7 +622,6 @@ export default function AiScannerPage() {
             />
           ) : isScanning ? (
             <div className="space-y-5">
-              {/* Progress bar */}
               <div>
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-sm font-medium text-ink-700">Processing...</span>
@@ -629,7 +635,6 @@ export default function AiScannerPage() {
                 </div>
               </div>
 
-              {/* Processing steps */}
               <div className="space-y-2.5">
                 {steps.map((step) => {
                   const SIcon = step.icon;
@@ -681,7 +686,6 @@ export default function AiScannerPage() {
             </div>
           ) : scanComplete ? (
             <div className="space-y-5">
-              {/* Extracted text */}
               <div>
                 <div className="flex items-center gap-2 mb-2">
                   <FileText size={14} className="text-ink-400" />
@@ -697,7 +701,6 @@ export default function AiScannerPage() {
                 />
               </div>
 
-              {/* Extracted fields */}
               {extractedFields.length > 0 && !extractedText.includes('❌') && (
                 <div>
                   <div className="flex items-center gap-2 mb-2">
@@ -745,7 +748,6 @@ export default function AiScannerPage() {
                 </div>
               )}
 
-              {/* Action buttons */}
               <div className="flex gap-3 flex-wrap">
                 {saved ? (
                   <div className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-green-50 text-green-700 text-sm font-medium w-full justify-center">
@@ -774,7 +776,7 @@ export default function AiScannerPage() {
         </PortalCard>
       </div>
 
-      {/* Scan history */}
+      {/* History Card */}
       <PortalCard className="p-6">
         <div className="flex items-center gap-2 mb-5">
           <History size={18} className="text-ink-400" />
