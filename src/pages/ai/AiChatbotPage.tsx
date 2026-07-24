@@ -31,10 +31,10 @@ const CAPABILITIES = [
 ];
 
 async function getAIResponse(input: string): Promise<string> {
-  const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+  const apiKey = import.meta.env.VITE_GEMINI_API_KEY?.trim();
   
   if (!apiKey) {
-    return "Error: Gemini API key not configured. Please add VITE_GEMINI_API_KEY to your .env file.";
+    return "Error: VITE_GEMINI_API_KEY is missing. Please add your Google AI Studio API key to .env or GitHub Secrets.";
   }
 
   // Mock responses for testing (comment out when production ready)
@@ -53,46 +53,44 @@ async function getAIResponse(input: string): Promise<string> {
     }
   }
 
-  // Google Gemini 1.5 Flash API Call
-  try {
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          contents: [
-            {
-              role: 'user',
-              parts: [
-                {
-                  text: `You are an AI assistant for a college management system. Answer questions about student enrollment, revenue, performance, and institutional insights. Keep responses concise, practical, and well-formatted with key details bolded where appropriate.\n\nUser question: ${input}`
-                }
-              ]
-            }
-          ]
-        }),
-      }
-    );
+  // Direct REST API Endpoint for Gemini 1.5 Flash (Google AI Studio)
+  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${encodeURIComponent(apiKey)}`;
 
-    if (!response.ok) {
-      const errData = await response.json();
-      throw new Error(`Gemini API Error: ${errData.error?.message || response.statusText}`);
-    }
+  try {
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        contents: [
+          {
+            role: 'user',
+            parts: [
+              {
+                text: `You are an AI assistant for a college management system. Answer questions about student enrollment, revenue, performance, and institutional insights. Keep responses concise, practical, and well-formatted with key details bolded where appropriate.\n\nUser question: ${input}`
+              }
+            ]
+          }
+        ]
+      }),
+    });
 
     const data = await response.json();
-    
+
+    if (!response.ok) {
+      console.error('Gemini API Error Payload:', data);
+      throw new Error(data.error?.message || `HTTP ${response.status} Error`);
+    }
+
     if (data.candidates && data.candidates.length > 0 && data.candidates[0].content?.parts?.length > 0) {
-      const reply = data.candidates[0].content.parts[0].text;
-      return reply || "I'm processing your request. Please try again.";
+      return data.candidates[0].content.parts[0].text;
     }
 
     return "Unable to generate response. Please try again.";
   } catch (error) {
     console.error('AI API Error:', error);
-    return `Error: ${error instanceof Error ? error.message : 'Failed to connect to AI service'}. Please try again later.`;
+    return `Error: ${error instanceof Error ? error.message : 'Failed to connect to AI service'}. Please check your API key setup.`;
   }
 }
 
