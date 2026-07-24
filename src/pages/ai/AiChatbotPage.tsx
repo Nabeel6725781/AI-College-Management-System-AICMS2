@@ -1,11 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
-import {
-  MessageSquare, Send, Bot, User, Brain,
-  TrendingUp, DollarSign, Users, AlertTriangle, Search,
-} from 'lucide-react';
-import {
-  PortalCard, PortalPageHeader,
-} from '../../components/portal-ui';
+import { MessageSquare, Send, Bot, User } from 'lucide-react';
+import { PortalCard, PortalPageHeader } from '../../components/portal-ui';
 
 type Message = {
   id: string;
@@ -21,57 +16,57 @@ const QUICK_SUGGESTIONS = [
   'Find at-risk students',
 ];
 
-const CAPABILITIES = [
-  { icon: TrendingUp, label: 'Enrollment Analytics', desc: 'Trends, forecasts, and demographic breakdowns' },
-  { icon: DollarSign, label: 'Revenue Insights', desc: 'Fee collection, outstanding balances, projections' },
-  { icon: Users, label: 'Student Performance', desc: 'At-risk identification, grade analysis, predictions' },
-  { icon: AlertTriangle, label: 'Anomaly Detection', desc: 'Unusual patterns in attendance, grades, or finances' },
-  { icon: Search, label: 'Smart Search', desc: 'Find students, courses, documents, and reports' },
-  { icon: Brain, label: 'Predictions', desc: 'Semester outcomes, attendance, and performance forecasts' },
-];
-
 async function getAIResponse(input: string): Promise<string> {
-  const apiKey = import.meta.env.VITE_GEMINI_API_KEY?.trim();
+  const apiKey = import.meta.env.VITE_HF_API_KEY?.trim();
   
   if (!apiKey) {
-    return "Error: VITE_GEMINI_API_KEY is missing. Please add your API key to .env file or GitHub Secrets.";
+    return "Error: VITE_HF_API_KEY is missing. Please add your Hugging Face API key to .env file.";
   }
 
-  // Direct REST API Endpoint for Google AI Studio (Gemini 1.5 Flash)
-  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${encodeURIComponent(apiKey)}`;
+  // Purely configured for Qwen 2.5 7B Instruct
+  const endpoint = "https://huggingface.co";
+
+  const systemPrompt = `You are an AI assistant for a college management system. Answer questions about student enrollment, revenue, performance, and institutional insights. Keep responses concise, practical, and well-formatted with key details bolded where appropriate. Always reply politely in a mix of English and Roman Urdu based on user language.`;
+
+  const fullPrompt = `<|im_start|>system\n${systemPrompt}<|im_end|>\n<|im_start|>user\n${input}<|im_end|>\n<|im_start|>assistant\n`;
 
   try {
     const response = await fetch(endpoint, {
       method: 'POST',
       headers: {
+        'Authorization': `Bearer ${apiKey}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        contents: [
-          {
-            role: 'user',
-            parts: [
-              {
-                text: `You are an AI assistant for a college management system. Answer questions about student enrollment, revenue, performance, and institutional insights. Keep responses concise, practical, and well-formatted with key details bolded where appropriate.\n\nUser question: ${input}`
-              }
-            ]
-          }
-        ]
+        inputs: fullPrompt,
+        parameters: { 
+          max_new_tokens: 500, 
+          temperature: 0.6,
+          return_full_text: false 
+        }
       }),
     });
 
     const data = await response.json();
 
     if (!response.ok) {
-      console.error('Gemini API Error Payload:', data);
-      throw new Error(data.error?.message || `HTTP ${response.status} Error`);
+      console.error('Hugging Face API Error Payload:', data);
+      throw new Error(data.error || `HTTP ${response.status} Error`);
     }
 
-    if (data.candidates && data.candidates.length > 0 && data.candidates[0].content?.parts?.length > 0) {
-      return data.candidates[0].content.parts[0].text;
+    let botReply = "";
+    if (Array.isArray(data) && data[0]?.generated_text) {
+      botReply = data[0].generated_text.trim();
+    } else if (data.generated_text) {
+      botReply = data.generated_text.trim();
+    } else if (data.error) {
+      return "Model abhi load ho raha hai, bara-e-meherbani 10 seconds baad dobara check karein.";
+    } else {
+      return "Unable to generate response from Qwen model. Please try again.";
     }
 
-    return "Unable to generate response. Please try again.";
+    return botReply.replace("<|im_end|>", "").replace("<|im_start|>", "").trim();
+
   } catch (error) {
     console.error('AI API Error:', error);
     return `Error: ${error instanceof Error ? error.message : 'Failed to connect to AI service'}. Please check your API key.`;
@@ -151,7 +146,7 @@ export default function AiChatbotPage() {
     <div className="animate-fade-in">
       <PortalPageHeader
         title="AI Chatbot"
-        subtitle="Intelligent assistant powered by Gemini 1.5 Flash"
+        subtitle="Intelligent assistant powered by Qwen 2.5 7B Instruct"
         icon={MessageSquare}
         action={
           <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full border ${
@@ -169,7 +164,7 @@ export default function AiChatbotPage() {
               connectionStatus === 'connecting' ? 'text-yellow-700' :
               'text-red-700'
             }`}>
-              {connectionStatus === 'online' ? 'AI Online' :
+              {connectionStatus === 'online' ? 'Qwen AI Online' :
                connectionStatus === 'connecting' ? 'Connecting...' :
                'Connection Error'}
             </span>
@@ -184,7 +179,7 @@ export default function AiChatbotPage() {
               <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-cyan-500 to-teal-600 flex items-center justify-center mb-4">
                 <Bot className="text-white" size={32} />
               </div>
-              <h3 className="text-lg font-bold text-ink-900 mb-2">Meridian AI Assistant</h3>
+              <h3 className="text-lg font-bold text-ink-900 mb-2">College AI Assistant</h3>
               <p className="text-sm text-ink-500 max-w-md mb-6">
                 Ask anything about your institution's enrollment, performance, or analytics
               </p>
@@ -207,74 +202,44 @@ export default function AiChatbotPage() {
               key={msg.id}
               className={`flex gap-3 ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}
             >
-              <div
-                className={`w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 ${
-                  msg.role === 'user'
-                    ? 'bg-ink-900'
-                    : 'bg-gradient-to-br from-cyan-500 to-teal-600'
-                }`}
-              >
-                {msg.role === 'user' ? (
-                  <User className="text-white" size={18} />
-                ) : (
-                  <Bot className="text-white" size={18} />
-                )}
+              <div className={`w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 ${
+                msg.role === 'user' ? 'bg-cyan-100 text-cyan-700' : 'bg-ink-100 text-ink-700'
+              }`}>
+                {msg.role === 'user' ? <User size={18} /> : <Bot size={18} />}
               </div>
-              <div className={`max-w-[75%] ${msg.role === 'user' ? 'flex flex-col items-end' : ''}`}>
-                <div
-                  className={`px-4 py-3 rounded-2xl text-sm leading-relaxed ${
-                    msg.role === 'user'
-                      ? 'bg-ink-900 text-white rounded-tr-sm'
-                      : 'bg-gradient-to-br from-cyan-50 to-teal-50 text-ink-900 rounded-tl-sm border border-cyan-100'
-                  }`}
-                >
+              <div className={`flex flex-col max-w-[70%] ${msg.role === 'user' ? 'items-end' : ''}`}>
+                <div className={`rounded-2xl px-4 py-2.5 text-sm ${
+                  msg.role === 'user' 
+                    ? 'bg-cyan-600 text-white rounded-tr-none' 
+                    : 'bg-ink-50 text-ink-800 rounded-tl-none'
+                }`}>
                   {formatContent(msg.content)}
                 </div>
-                <div className={`text-[10px] text-ink-400 mt-1 px-2 ${msg.role === 'user' ? 'text-right' : ''}`}>
-                  {msg.timestamp}
-                </div>
+                <span className="text-[10px] text-ink-400 mt-1 px-1">{msg.timestamp}</span>
               </div>
             </div>
           ))}
 
           {thinking && (
             <div className="flex gap-3">
-              <div className="w-9 h-9 rounded-full bg-gradient-to-br from-cyan-500 to-teal-600 flex items-center justify-center flex-shrink-0">
-                <Bot className="text-white" size={18} />
+              <div className="w-9 h-9 rounded-full bg-ink-100 text-ink-700 flex items-center justify-center flex-shrink-0">
+                <Bot size={18} />
               </div>
-              <div className="px-4 py-3 rounded-2xl bg-gradient-to-br from-cyan-50 to-teal-50 rounded-tl-sm border border-cyan-100">
-                <div className="flex gap-1.5">
-                  <span className="w-2 h-2 bg-cyan-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                  <span className="w-2 h-2 bg-cyan-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                  <span className="w-2 h-2 bg-cyan-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
-                </div>
+              <div className="bg-ink-50 text-ink-500 text-sm rounded-2xl rounded-tl-none px-4 py-2.5 flex items-center gap-1">
+                <span className="w-1.5 h-1.5 bg-ink-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                <span className="w-1.5 h-1.5 bg-ink-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                <span className="w-1.5 h-1.5 bg-ink-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
               </div>
             </div>
           )}
           <div ref={messagesEndRef} />
         </div>
 
-        <div className="border-t border-ink-100 p-4">
-          <div className="flex gap-2">
-            <input
-              type="text"
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter' && !thinking) handleSend(); }}
-              placeholder={thinking ? "AI is thinking..." : "Ask me anything..."}
-              disabled={thinking}
-              className="flex-1 px-4 py-3 rounded-lg border border-ink-200 bg-white text-ink-900 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500 disabled:opacity-50"
-            />
-            <button
-              onClick={() => handleSend()}
-              disabled={thinking || !input.trim()}
-              className="inline-flex items-center justify-center w-12 h-12 rounded-lg bg-gradient-to-br from-cyan-500 to-teal-600 text-white hover:from-cyan-600 hover:to-teal-700 transition-all disabled:opacity-50 flex-shrink-0"
-            >
-              <Send size={18} />
-            </button>
-          </div>
-        </div>
-      </PortalCard>
-    </div>
-  );
-}
+        <div className="p-4 bg-ink-50/50 border-top border-ink-100 flex gap-2 items-center">
+          <input
+            type="text"
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && handleSend()}
+            placeholder="Ask about college insights..."
+            disabled={thinking}
